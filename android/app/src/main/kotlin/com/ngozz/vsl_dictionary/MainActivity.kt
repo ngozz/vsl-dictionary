@@ -1,4 +1,4 @@
-package com.example.vsl_dictionary
+package com.ngozz.vsl_dictionary
 
 import io.flutter.embedding.android.FlutterActivity
 
