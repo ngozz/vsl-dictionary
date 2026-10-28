@@ -138,7 +138,7 @@ jobs:
       - name: Create key.properties
         run: |
           cat > android/key.properties <<EOF
-          storeFile=app/vsl-dictionary.jks
+          storeFile=vsl-dictionary.jks
           storePassword=${{ secrets.ANDROID_STORE_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
