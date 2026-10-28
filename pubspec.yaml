@@ -38,15 +38,6 @@ dependencies:
   shared_preferences: ^2.3.0
 
 dev_dependencies:
-  flutter_launcher_icons: ^0.14.4
-
-flutter_launcher_icons:
-  image_path: 'icon.png'
-  android: true
-  ios: false
-  adaptive_icon_background: '#FFFFFF'
-  adaptive_icon_foreground: 'icon.png'
-  remove_alpha_ios: false
   flutter_test:
     sdk: flutter
 
@@ -56,6 +47,14 @@ flutter_launcher_icons:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+
+flutter_launcher_icons:
+  image_path: 'icon.png'
+  android: true
+  ios: false
+  adaptive_icon_background: '#FFFFFF'
+  adaptive_icon_foreground: 'icon.png'
+  remove_alpha_ios: false
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
