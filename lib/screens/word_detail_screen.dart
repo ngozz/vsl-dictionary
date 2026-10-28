@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -100,9 +99,9 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
       PageRouteBuilder(
         opaque: false,
         transitionDuration: const Duration(milliseconds: 200),
-        pageBuilder: (_, __, ___) =>
+        pageBuilder: (_, _, _) =>
             _FullscreenVideo(controller: _controller!, onSlow: _toggleSlow),
-        transitionsBuilder: (_, anim, __, child) =>
+        transitionsBuilder: (_, anim, _, child) =>
             FadeTransition(opacity: anim, child: child),
       ),
     ).then((_) {
