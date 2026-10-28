@@ -1,11 +1,11 @@
 {
-    "name": "vsl_dictionary",
-    "short_name": "vsl_dictionary",
+    "name": "Từ điển Ký hiệu",
+    "short_name": "Ký hiệu",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFFFFF",
+    "theme_color": "#4CAF50",
+    "description": "Từ điển ký hiệu ngôn ngữ Việt Nam",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

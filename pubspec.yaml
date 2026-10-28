@@ -39,6 +39,7 @@ dependencies:
 
 dev_dependencies:
   flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.6
   flutter_test:
     sdk: flutter
   # The "flutter_lints" package below contains a set of recommended lints to
@@ -50,10 +51,22 @@ dev_dependencies:
 flutter_launcher_icons:
   image_path: 'icon.png'
   android: true
-  ios: false
+  ios: true
   adaptive_icon_background: '#FFFFFF'
   adaptive_icon_foreground: 'icon.png'
-  remove_alpha_ios: false
+  remove_alpha_ios: true
+  web:
+    generate: true
+    image_path: 'icon.png'
+    background_color: '#FFFFFF'
+    theme_color: '#4CAF50'
+
+flutter_native_splash:
+  # Pure black launch screen on every platform; no logo, no spinner.
+  color: '#000000'
+  web: true
+  android_12:
+    color: '#000000'
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
