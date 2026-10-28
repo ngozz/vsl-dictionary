@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.vsl_dictionary"
+    namespace = "com.ngozz.vsl_dictionary"
     compileSdk = flutter.compileSdkVersion
 
     compileOptions {
@@ -15,7 +15,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.vsl_dictionary"
+        applicationId = "com.ngozz.vsl_dictionary"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

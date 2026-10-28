@@ -4,7 +4,7 @@
   "apps": [
     {
       "name": "VSL Dictionary",
-      "bundleIdentifier": "com.example.vslDictionary",
+      "bundleIdentifier": "com.ngozz.vsl_dictionary",
       "developerName": "ngozz",
       "subtitle": "Vietnamese Sign Language dictionary",
       "localizedDescription": "An offline-first Vietnamese Sign Language dictionary.",
