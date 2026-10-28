@@ -4,6 +4,7 @@ import '../main.dart';
 import '../models/word.dart';
 import '../services/dictionary_service.dart';
 import '../services/media_service.dart' show ThemeChoice;
+import '../widgets/fast_scroller.dart';
 import 'word_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -232,6 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // Alphabet grouping for the big tabs; small curated tabs stay plain.
     bool group = _tab == HomeTab.all || _tab == HomeTab.words;
     return _GroupedBrowseList(
+      key: ValueKey(_tab), // new state + ScrollController per tab, never shared
       words: _browseList,
       group: group,
       onOpen: _openWord,
@@ -343,9 +345,8 @@ class _CategoryTabs extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Browse list: alphabet-grouped (optional) with an A-Z jump rail.
-// Uses ScrollablePositionedList because GlobalKeys inside a lazily-built
-// ListView have no context for off-screen sections.
+// Browse list: alphabet-grouped (optional), fixed-extent rows for exact
+// offset math, scrubbed via the FastScroller gutter (contacts-style).
 // ---------------------------------------------------------------------------
 
 class _GroupedBrowseList extends StatefulWidget {
@@ -354,6 +355,7 @@ class _GroupedBrowseList extends StatefulWidget {
   final ValueChanged<Word> onOpen;
 
   const _GroupedBrowseList({
+    super.key,
     required this.words,
     required this.group,
     required this.onOpen,
@@ -372,8 +374,8 @@ class _GroupedBrowseListState extends State<_GroupedBrowseList> {
 
   final ScrollController _scroll = ScrollController();
   List<_Row> _rows = const [];
-  List<int> _headerIndex = const [];
   List<String> _railLetters = const [];
+  List<double> _sectionOffsets = const []; // scroll offset where each section starts
 
   @override
   void initState() {
@@ -433,33 +435,39 @@ class _GroupedBrowseListState extends State<_GroupedBrowseList> {
       rows.add((SearchResult(w, -1, 0, 0), null));
     }
     _rows = rows;
-    _headerIndex = headerIndex;
     _railLetters = railLetters;
+    // k headers + (row - k) tiles sit above header k
+    _sectionOffsets = [
+      for (var k = 0; k < headerIndex.length; k++)
+        k * _headerExtent + (headerIndex[k] - k) * _tileExtent,
+    ];
   }
 
-  void _onRailTap(String key) {
-    final k = _railLetters.indexOf(key);
-    if (k < 0) return;
-    // k headers + (row - k) tiles sit above header k
-    final target = k * _headerExtent + (_headerIndex[k] - k) * _tileExtent;
-    _scroll.animateTo(
-      target.clamp(0.0, _scroll.position.maxScrollExtent),
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-    );
+  /// Section letter at a content position (binary search over section starts).
+  String _labelAt(double pos) {
+    if (_railLetters.isEmpty) return '';
+    var lo = 0, hi = _sectionOffsets.length - 1;
+    while (lo < hi) {
+      final mid = (lo + hi + 1) >> 1;
+      if (_sectionOffsets[mid] <= pos + 1) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return _railLetters[lo];
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     if (_rows.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final list = Scrollbar(
-      controller: _scroll,
-      interactive: true,
-      thumbVisibility: false,
+    // The framework auto-adds a scrollbar on web/desktop; switch it off so
+    // it doesn't double up with our own thumb.
+    final list = ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
       child: ListView.builder(
         controller: _scroll,
         itemCount: _rows.length,
@@ -474,52 +482,11 @@ class _GroupedBrowseListState extends State<_GroupedBrowseList> {
       ),
     );
 
-    if (!widget.group) return list;
-
-    return Stack(
-      children: [
-        // Tiles inset to leave room for the rail (no overlay).
-        Padding(
-          padding: const EdgeInsets.only(right: 34),
-          child: list,
-        ),
-        Positioned(
-          right: 2,
-          top: 8,
-          bottom: 8,
-          child: Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final l in _railLetters)
-                    InkWell(
-                      onTap: () => _onRailTap(l),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 1.5, horizontal: 6),
-                        child: Text(
-                          l,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 10,
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
+    // Small curated tabs (numbers / alphabet): plain scrollbar, no letters.
+    if (!widget.group) {
+      return Scrollbar(controller: _scroll, interactive: true, child: list);
+    }
+    return FastScroller(controller: _scroll, labelAt: _labelAt, child: list);
   }
 }
 
