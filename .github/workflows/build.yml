@@ -79,7 +79,12 @@ jobs:
         run: flutter pub get
 
       - name: Build web
-        run: flutter build web --release
+        run: flutter build web --release --base-href /vsl-dictionary/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
 
       - name: Package web build
         run: |
@@ -92,6 +97,22 @@ jobs:
           name: web
           path: vsl-dictionary-web.zip
           if-no-files-found: error
+
+  deploy-pages:
+    name: Deploy Web to GitHub Pages
+    needs: [check, build-web]
+    if: needs.check.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   build-android:
     name: Build Android APK
