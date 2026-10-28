@@ -24,13 +24,14 @@ jobs:
         id: trigger
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "Manual run: build enabled."
             exit 0
           fi
 
-          if grep -Fq '[build]' <<< "${{ github.event.head_commit.message }}"; then
+          commit_message="$(jq -r '.head_commit.message // ""' "$GITHUB_EVENT_PATH")"
+          if grep -Fq '[build]' <<< "$commit_message"; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "Push message includes [build]: build enabled."
           else
