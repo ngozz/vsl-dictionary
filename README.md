@@ -69,7 +69,12 @@ Each build run **creates a GitHub Release** (`v<run-number>`) containing:
 
 The web artifact is also **deployed to GitHub Pages** automatically on each
 `main` build (base path is baked at build time so it works under
-`/<repo>/`).
+`/<repo>/`). The online app is available at
+`https://ngozz.github.io/vsl-dictionary/`.
+
+The iOS build can be added to SideStore or AltStore using this source:
+`https://ngozz.github.io/vsl-dictionary/altstore-source.json`. It points to the
+latest unsigned IPA release; SideStore/AltStore signs it during installation.
 
 ### Repo setup notes
 

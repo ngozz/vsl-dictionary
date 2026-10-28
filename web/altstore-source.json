@@ -1,0 +1,22 @@
+{
+  "name": "VSL Dictionary",
+  "identifier": "ngozz.vsl-dictionary",
+  "apps": [
+    {
+      "name": "VSL Dictionary",
+      "bundleIdentifier": "com.example.vslDictionary",
+      "developerName": "ngozz",
+      "subtitle": "Vietnamese Sign Language dictionary",
+      "localizedDescription": "An offline-first Vietnamese Sign Language dictionary.",
+      "iconURL": "https://ngozz.github.io/vsl-dictionary/icons/Icon-512.png",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "buildVersion": "1",
+          "date": "2026-10-28T00:00:00Z",
+          "downloadURL": "https://github.com/ngozz/vsl-dictionary/releases/latest/download/vsl-dictionary-ios-unsigned.ipa"
+        }
+      ]
+    }
+  ]
+}
