@@ -75,6 +75,56 @@ The web artifact is also **deployed to GitHub Pages** automatically on each
 The iOS build can be added to SideStore or AltStore using this source:
 `https://ngozz.github.io/vsl-dictionary/altstore-source.json`. It points to the
 latest unsigned IPA release; SideStore/AltStore signs it during installation.
+The source file is `web/altstore-source.json`.
+
+### Android signing
+
+Android updates must use the same signing certificate as the installed
+version. To use one certificate locally and in GitHub Actions:
+
+1. Generate a release keystore once, outside the repository:
+
+   ```bash
+   keytool -genkeypair -v \
+     -keystore vsl-dictionary-release.jks \
+     -alias vsl-dictionary \
+     -keyalg RSA -keysize 2048 -validity 10000
+   ```
+
+2. Keep the `.jks` file and its passwords private. Back them up securely; if
+   the keystore is lost, existing installations cannot be updated.
+3. Configure local Flutter builds with `android/key.properties`:
+
+   ```properties
+   storePassword=YOUR_KEYSTORE_PASSWORD
+   keyPassword=YOUR_KEY_PASSWORD
+   keyAlias=vsl-dictionary
+   storeFile=/absolute/path/to/vsl-dictionary-release.jks
+   ```
+
+   Do not commit `android/key.properties` or the keystore.
+4. Add the same values to GitHub repository secrets:
+   `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
+   `ANDROID_KEY_PASSWORD`, and `ANDROID_KEY_ALIAS`. The keystore should be
+   base64-encoded for the secret:
+
+   ```bash
+   base64 -w 0 vsl-dictionary-release.jks
+   ```
+
+5. Configure `android/app/build.gradle.kts` to read `key.properties` locally
+   and use the decoded GitHub secret in CI, then build with
+   `flutter build apk --release`.
+
+Before switching signing keys, verify the certificate fingerprints:
+
+```bash
+keytool -list -v -keystore vsl-dictionary-release.jks | grep -E 'Alias name|SHA256'
+apksigner verify --print-certs path/to/app.apk
+```
+
+Changing the application ID or signing key creates a separate Android app
+instead of an update.
 
 ### Repo setup notes
 
