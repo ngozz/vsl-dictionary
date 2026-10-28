@@ -95,8 +95,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void _openWord(Word w) {
     Navigator.of(context).push(
       PageRouteBuilder(
-        pageBuilder: (_, __, ___) => WordDetailScreen(word: w),
-        transitionsBuilder: (_, anim, __, child) =>
+        pageBuilder: (_, _, _) => WordDetailScreen(word: w),
+        transitionsBuilder: (_, anim, _, child) =>
             FadeTransition(opacity: anim, child: SlideTransition(
               position: Tween(begin: const Offset(0, .02), end: Offset.zero)
                   .chain(CurveTween(curve: Curves.easeOutCubic))
