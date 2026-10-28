@@ -65,7 +65,10 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
       _surfaceKey = UniqueKey();
     });
     final old = _controller;
-    final controller = VideoPlayerController.asset(asset);
+    // mixWithOthers: videos are silent; never steal audio focus from other
+    // apps (e.g. interrupt Spotify) when the player initializes on iOS.
+    final controller = VideoPlayerController.asset(asset,
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
     _controller = controller;
     _initializeFuture = controller.initialize().then((_) async {
       await controller.setLooping(true);
