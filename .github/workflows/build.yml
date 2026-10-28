@@ -1,0 +1,143 @@
+name: Build & Release
+
+# Runs when a push commit message contains "[build]", or manually.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create releases
+  pages: write
+  id-token: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  skip-check:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - id: check
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+        # Manual runs always build; pushes only when the commit message has [build].
+        run: |
+          echo "build_date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$(git log -1 --pretty=%s | tr '[:upper:]' '[:lower:]')" == *"[build]"* ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: skip-check
+    if: needs.skip-check.outputs.should_run == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest      # web + apk
+            target: web-apk
+          - os: macos-latest       # unsigned ipa
+            target: ipa
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      # ---------- Web ----------
+      - name: Build Web
+        if: matrix.target == 'web-apk'
+        run: flutter build web --release --base-href "/${GITHUB_REPOSITORY#*/}/"
+
+      # ---------- Android ----------
+      - name: Build APK
+        if: matrix.target == 'web-apk'
+        run: flutter build apk --release
+
+      # ---------- iOS (unsigned) ----------
+      - name: Build iOS framework
+        if: matrix.target == 'ipa'
+        run: |
+          flutter build ios --release --no-codesign
+          mkdir -p build/ios/Payload
+          cp -r build/ios/iphoneos/Runner.app build/ios/Payload/Runner.app
+          cd build/ios && zip -qr ../vsl-dictionary-ios-unsigned.ipa Payload
+
+      # ---------- Release ----------
+      - name: Rename artifacts
+        run: |
+          mkdir -p dist
+          NAME="VSL Dictionary ${{ needs.skip-check.outputs.build_date }}"
+          if [ "${{ matrix.target }}" = "web-apk" ]; then
+            cp build/app/outputs/flutter-apk/app-release.apk "dist/${NAME}.apk"
+            cd build/web && zip -qr "../../dist/${NAME} web.zip" .
+          else
+            cp build/ios/vsl-dictionary-ios-unsigned.ipa "dist/${NAME} iOS.ipa"
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Build ${{ github.run_number }}
+          files: dist/*
+          body: |
+            Automated build from commit ${{ github.sha }}
+
+            ${{ github.event.head_commit.message }}
+
+            - `apk` — sideload to Android
+            - `web` — static web build (serve from any host)
+            - `iOS` — unsigned build
+          make_latest: true
+
+  deploy-pages:
+    needs: [skip-check, build]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Fetch web artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-apk
+          path: ./web-dist
+      - name: Unpack
+        run: unzip -q "./web-dist/VSL Dictionary ${{ needs.skip-check.outputs.build_date }} web.zip" -d ./pages
+      - name: Pages setup
+        uses: actions/configure-pages@v5
+      - name: Upload pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./pages
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
