@@ -71,7 +71,7 @@ class SettingsService extends ChangeNotifier {
   static const _favoritesKey = 'vsl.favorites';
   static const _themeKey = 'vsl.theme';
 
-  Region _defaultRegion = Region.south;
+  Region _defaultRegion = Region.north;
   Set<String> _favorites = {};
   ThemeChoice _theme = ThemeChoice.dark;
 
@@ -82,7 +82,7 @@ class SettingsService extends ChangeNotifier {
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     _defaultRegion =
-        Region.values.asNameMap()[prefs.getString(_regionKey)] ?? Region.south;
+        Region.values.asNameMap()[prefs.getString(_regionKey)] ?? Region.north;
     _favorites = (prefs.getStringList(_favoritesKey) ?? const []).toSet();
     _theme = ThemeChoice.values.asNameMap()[prefs.getString(_themeKey)] ??
         ThemeChoice.dark;
