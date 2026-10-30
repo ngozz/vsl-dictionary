@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
@@ -7,6 +8,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../config.dart';
@@ -47,10 +49,17 @@ class VideoEntry {
 /// The catalog (flat, no lesson grouping) also powers `canStream`, so the
 /// word-detail screen knows a video exists even when its asset is not
 /// bundled — including on web, where the manifest ships inside the app.
-class DownloadService extends ChangeNotifier {
+/// The app itself is the download queue: at most [_maxConcurrent] tasks are
+/// native (WorkManager / URLSession) at a time, refilled from an app-side
+/// pending list. This keeps cancels clean (only a few native tasks to
+/// cancel — no notification worker storms), and the pending list is flushed
+/// to the native queue when the app is backgrounded, so downloads continue
+/// after quitting.
+class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
   static const _dirName = 'videos';
   static const _taskGroup = 'vsl_downloads';
   static const _playGroup = 'vsl_play'; // play-triggered: never notifies
+  static const _maxConcurrent = 10;
 
   DownloadService._();
   static DownloadService? _instance;
@@ -69,6 +78,8 @@ class DownloadService extends ChangeNotifier {
   final List<String> _failedNames = [];
   final Map<String, Completer<bool>> _waiters = {};
   final Map<String, String> _taskGroups = {}; // name → notification group
+  final ListQueue<(VideoEntry, String)> _pending = ListQueue(); // app-side queue
+  final Set<String> _pendingNames = <String>{};
   int _batchTotal = 0; // baked total of the current batch (notification/UI)
   int _deleteDone = 0;
   int _deleteTotal = 0;
@@ -136,6 +147,26 @@ class DownloadService extends ChangeNotifier {
     }
   }
 
+  /// Makes sure [name] has a verified local copy, downloading it silently if
+  /// needed (play-triggered tasks never notify). True when ready to play.
+  /// iOS uses this to fetch before playback (AVPlayer cannot play 200-only
+  /// streams); Android uses it to keep an offline copy of watched words.
+  Future<bool> ensureDownloaded(String name) async {
+    if (!_active) return false;
+    final n = _baseName(name);
+    if (hasPlayableLocal(n)) return true;
+    // Needed now: pull it out of the app-side queue if it is waiting there.
+    if (_pendingNames.contains(n)) {
+      _pending.removeWhere((r) => r.$1.name == n);
+      _pendingNames.remove(n);
+      _batchTotal = (_batchTotal - 1).clamp(0, _batchTotal);
+    }
+    final entry = _catalogByName[n];
+    enqueueAll([entry ?? VideoEntry(name: n, size: 0, sha256: '')],
+        group: _playGroup);
+    return waitFor(n);
+  }
+
   /// Resolves when [name] reaches a terminal state: true = verified local
   /// copy ready to play; false = failed/canceled/verification error.
   Future<bool> waitFor(String name) {
@@ -148,20 +179,6 @@ class DownloadService extends ChangeNotifier {
 
   void _completeWaiter(String name, bool ok) {
     _waiters.remove(name)?.complete(ok);
-  }
-
-  /// Makes sure [name] has a verified local copy, downloading it silently if
-  /// needed (play-triggered tasks never notify). True when ready to play.
-  /// iOS uses this to fetch before playback (AVPlayer cannot play 200-only
-  /// streams); Android uses it to keep an offline copy of watched words.
-  Future<bool> ensureDownloaded(String name) async {
-    if (!_active) return false;
-    final n = _baseName(name);
-    if (hasPlayableLocal(n)) return true;
-    final entry = _catalogByName[n];
-    enqueueAll([entry ?? VideoEntry(name: n, size: 0, sha256: '')],
-        group: _playGroup);
-    return waitFor(n);
   }
 
   /// Resolves how a video filename plays.
@@ -190,6 +207,7 @@ class DownloadService extends ChangeNotifier {
 
   Future<void> initialize() async {
     _ready = true; // guards double init
+    WidgetsBinding.instance.addObserver(this);
     try {
       _active = !kIsWeb &&
           CdnConfig.useCdn &&
@@ -286,6 +304,71 @@ class DownloadService extends ChangeNotifier {
     }
   }
 
+  // ── App-side queue ───────────────────────────────────────────────────────
+
+  DownloadTask _buildTask(VideoEntry e, String group) => DownloadTask(
+        taskId: '${e.name}.mp4',
+        group: group,
+        url: '${CdnConfig.baseUrl}/videos/${e.name}.mp4',
+        filename: '${e.name}.mp4',
+        baseDirectory: BaseDirectory.applicationSupport,
+        directory: _dirName,
+        allowPause: true, // resumes across Android's 9-min Worker cycles
+        retries: 2,
+      );
+
+  /// Discards any old copy, then natively enqueues one task.
+  void _enqueueNow(VideoEntry e, String group) {
+    final file = fileFor(e.name);
+    if (file.existsSync()) file.deleteSync();
+    final sidecar = File(_metaPath(e.name));
+    if (sidecar.existsSync()) sidecar.deleteSync();
+    _downloaded.remove(e.name);
+    _status[e.name] = TaskStatus.enqueued;
+    _progress[e.name] = 0;
+    final task = _buildTask(e, group);
+    _expect[task.taskId] = e;
+    _taskGroups[e.name] = group;
+    unawaited(_dl.enqueue(task));
+  }
+
+  /// Tops the native queue back up to [_maxConcurrent] from [_pending]
+  /// (head-of-line: the queue drains in order, per group).
+  void _refillQueue() {
+    while (_pending.isNotEmpty) {
+      final (e, group) = _pending.first;
+      var busyIn = 0;
+      _taskGroups.forEach((n, g) {
+        if (g == group && isBusy(n)) busyIn++;
+      });
+      if (busyIn >= _maxConcurrent) return;
+      _pending.removeFirst();
+      _pendingNames.remove(e.name);
+      _enqueueNow(e, group);
+    }
+  }
+
+  /// Called when the app is backgrounded: hand the whole pending list to the
+  /// native queue (the holding queue keeps concurrency bounded) so downloads
+  /// continue even if the OS kills the Dart isolate.
+  void _flushPendingToNative() {
+    if (_pending.isEmpty) return;
+    final tasks = <DownloadTask>[];
+    while (_pending.isNotEmpty) {
+      final (e, group) = _pending.removeFirst();
+      _pendingNames.remove(e.name);
+      _status[e.name] = TaskStatus.enqueued;
+      _taskGroups[e.name] = group;
+      tasks.add(_buildTask(e, group));
+    }
+    unawaited(_dl.enqueueAll(tasks));
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) _flushPendingToNative();
+  }
+
   // ── Events ───────────────────────────────────────────────────────────────
 
   void _onUpdate(TaskUpdate update) {
@@ -306,6 +389,8 @@ class DownloadService extends ChangeNotifier {
           if (busyBatchCount == 0) _batchTotal = 0;
         }
       }
+      // Top the native queue back up as slots free up.
+      _refillQueue();
     }
     notifyListeners();
   }
@@ -395,42 +480,36 @@ class DownloadService extends ChangeNotifier {
     _taskGroups.forEach((n, g) {
       if (g == taskGroup && isBusy(n)) outstanding++;
     });
+    final slots = (_maxConcurrent - outstanding).clamp(0, _maxConcurrent);
     var created = 0;
-    final tasks = <DownloadTask>[];
+    var createdBatch = 0;
     for (final e in entries) {
-      if (_isBusyOrDone(e.name)) continue;
-      final file = fileFor(e.name);
-      if (file.existsSync()) file.deleteSync();
-      final sidecar = File(_metaPath(e.name));
-      if (sidecar.existsSync()) sidecar.deleteSync();
-      _downloaded.remove(e.name);
-      _status[e.name] = TaskStatus.enqueued;
-      _progress[e.name] = 0;
-      final task = DownloadTask(
-        taskId: '${e.name}.mp4',
-        group: taskGroup,
-        url: '${CdnConfig.baseUrl}/videos/${e.name}.mp4',
-        filename: '${e.name}.mp4',
-        baseDirectory: BaseDirectory.applicationSupport,
-        directory: _dirName,
-        allowPause: true, // resumes across Android's 9-min Worker cycles
-        retries: 2,
-      );
-      tasks.add(task);
-      _expect[task.taskId] = e;
-      _taskGroups[e.name] = taskGroup;
-      created++;
+      if (_isBusyOrDone(e.name) || _pendingNames.contains(e.name)) continue;
+      // Play-group (single word) downloads never wait in the queue.
+      if (taskGroup == _taskGroup && created >= slots) {
+        _pending.addLast((e, taskGroup));
+        _pendingNames.add(e.name);
+      } else {
+        _enqueueNow(e, taskGroup);
+        created++;
+        if (taskGroup == _taskGroup) createdBatch++;
+      }
     }
+    final pendingBatch =
+        _pending.where((r) => r.$2 == _taskGroup).length;
     // iOS: a dynamic group text re-issues a notification per change — stay
     // silent there (progress lives in the app). Android: a neutral STATIC
     // text — no dynamic placeholders, so nothing can trail; the complete
     // notification fires from the final worker when the batch ends.
-    if (!Platform.isIOS && taskGroup == _taskGroup && created > 0) {
-      final total = outstanding + created;
+    if (!Platform.isIOS && taskGroup == _taskGroup) {
+      final total = outstanding + createdBatch + pendingBatch;
       var remainingBytes = 0;
       _expect.forEach((taskId, e) {
         if (_taskGroups[e.name] == _taskGroup) remainingBytes += e.size;
       });
+      for (final r in _pending) {
+        if (r.$2 == _taskGroup) remainingBytes += r.$1.size;
+      }
       final mb = remainingBytes >= 1073741824
           ? '${(remainingBytes / 1073741824).toStringAsFixed(1)} GB'
           : '${(remainingBytes / 1048576).round()} MB';
@@ -445,7 +524,6 @@ class DownloadService extends ChangeNotifier {
         groupNotificationId: 'vsl_dictionary_downloads',
       );
     }
-    unawaited(_dl.enqueueAll(tasks));
     notifyListeners();
     return created;
   }
@@ -458,7 +536,7 @@ class DownloadService extends ChangeNotifier {
     if (!_active) return const [];
     return [
       for (final e in _catalogByName.values)
-        if (!_isBusyOrDone(e.name)) e,
+        if (!_isBusyOrDone(e.name) && !_pendingNames.contains(e.name)) e,
     ];
   }
 
@@ -493,15 +571,26 @@ class DownloadService extends ChangeNotifier {
     await _dl.cancelTasksWithIds(ids);
   }
 
-  /// Cancels every in-flight batch download (downloaded copies are kept).
-  Future<void> cancelBatch() => cancelTasks(_taskGroups.entries
-      .where((e) => e.value == _taskGroup)
-      .map((e) => e.key));
+  /// Cancels the current batch: in-flight tasks are canceled, app-side
+  /// pending entries are dropped; downloaded copies are kept.
+  Future<void> cancelBatch() async {
+    _pending.clear();
+    _pendingNames.clear();
+    _batchTotal = 0;
+    notifyListeners();
+    await cancelTasks(_taskGroups.entries
+        .where((e) => e.value == _taskGroup)
+        .map((e) => e.key));
+  }
 
   /// In-flight batch downloads (the notification group).
   int get busyBatchCount => _taskGroups.entries
       .where((e) => e.value == _taskGroup && isBusy(e.key))
       .length;
+
+  /// Batch videos waiting in the app-side queue.
+  int get pendingBatchCount =>
+      _pending.where((r) => r.$2 == _taskGroup).length;
 
   /// The baked total of the current batch (0 when idle).
   int get batchTotal => _batchTotal;
@@ -513,6 +602,8 @@ class DownloadService extends ChangeNotifier {
   /// Deletes every downloaded copy, canceling in-flight tasks first.
   /// Reports progress via [deleteDone]/[deleteTotal] for the in-app banner.
   Future<int> deleteAll() async {
+    _pending.clear();
+    _pendingNames.clear();
     await cancelTasks(_catalogByName.keys);
     final names = _downloaded.keys.toList();
     if (names.isEmpty) return 0;

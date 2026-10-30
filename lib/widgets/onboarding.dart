@@ -32,7 +32,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
     (
       Icons.volunteer_activism_outlined,
       'Nguồn dữ liệu',
-      'Dữ liệu từ dự án “NgonTay” (qipedc.moet.gov.vn) — chúc học tốt!',
+      'Dữ liệu từ dự án “NgonTay” — bản số hóa của Từ điển Ký hiệu Việt '
+          'Nam (qipedc.moet.gov.vn, Trung tâm Ký hiệu Việt Nam / Bộ Giáo '
+          'dục và Đào tạo). Ứng dụng dùng làm cá nhân, không phải tác phẩm '
+          'gốc. Chúc học tốt!',
     ),
   ];
 
