@@ -9,6 +9,7 @@ import '../models/word.dart';
 import '../config.dart' show CdnConfig;
 import '../services/dictionary_service.dart';
 import '../services/media_service.dart' show ThemeChoice;
+import '../widgets/download_banner.dart';
 import '../widgets/download_dialogs.dart';
 import '../widgets/fast_scroller.dart';
 import '../widgets/onboarding.dart';
@@ -305,6 +306,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                         ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: DownloadBanner(),
                       ),
                       _CategoryTabs(selected: _tab, onSelected: _setTab),
                       Expanded(child: _buildList()),
