@@ -265,10 +265,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: theme.textTheme.bodySmall),
                   const SizedBox(height: 8),
                   SegmentedButton<Region>(
+                    showSelectedIcon: false, // no width change on select
                     segments: const [
-                      ButtonSegment(value: Region.north, label: Text('Bắc')),
-                      ButtonSegment(value: Region.central, label: Text('Trung')),
-                      ButtonSegment(value: Region.south, label: Text('Nam')),
+                      ButtonSegment(
+                          value: Region.north,
+                          label: SizedBox(
+                              width: 60, child: Center(child: Text('Bắc')))),
+                      ButtonSegment(
+                          value: Region.central,
+                          label: SizedBox(
+                              width: 60, child: Center(child: Text('Trung')))),
+                      ButtonSegment(
+                          value: Region.south,
+                          label: SizedBox(
+                              width: 60, child: Center(child: Text('Nam')))),
                     ],
                     selected: {App.settings.defaultRegion},
                     onSelectionChanged: (sel) =>
@@ -278,12 +288,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   Text('Giao diện', style: theme.textTheme.bodySmall),
                   const SizedBox(height: 8),
                   SegmentedButton<ThemeChoice>(
+                    showSelectedIcon: false, // no width change on select
                     segments: const [
-                      ButtonSegment(value: ThemeChoice.dark, label: Text('Tối')),
                       ButtonSegment(
-                          value: ThemeChoice.black, label: Text('Đen')),
+                          value: ThemeChoice.dark,
+                          label: SizedBox(
+                              width: 52, child: Center(child: Text('Tối')))),
                       ButtonSegment(
-                          value: ThemeChoice.light, label: Text('Sáng')),
+                          value: ThemeChoice.black,
+                          label: SizedBox(
+                              width: 52, child: Center(child: Text('Đen')))),
+                      ButtonSegment(
+                          value: ThemeChoice.light,
+                          label: SizedBox(
+                              width: 52, child: Center(child: Text('Sáng')))),
                     ],
                     selected: {App.settings.theme},
                     onSelectionChanged: (sel) =>
