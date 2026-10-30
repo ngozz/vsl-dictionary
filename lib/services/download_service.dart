@@ -150,9 +150,9 @@ class DownloadService extends ChangeNotifier {
         _dl.updates.listen(_onUpdate, onError: (Object e) {
           debugPrint('[DOWNLOAD] update stream error: $e');
         });
-        // Limit to a few concurrent downloads so other traffic keeps
-        // bandwidth to itself.
-        _dl.configure(globalConfig: (Config.holdingQueue, (3, null, null)));
+        // Sign videos are tiny — run up to 10 concurrently so the whole
+        // catalog downloads quickly.
+        _dl.configure(globalConfig: (Config.holdingQueue, (10, null, null)));
         // One merged notification for the whole batch ("25/500"), not one
         // per file. Errors summarize; completions stay silent (the app
         // shows detailed progress).
