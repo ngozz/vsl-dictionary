@@ -1,13 +1,17 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../main.dart';
 import '../models/word.dart';
+import '../config.dart' show CdnConfig;
 import '../services/dictionary_service.dart';
 import '../services/media_service.dart' show ThemeChoice;
 import '../widgets/download_dialogs.dart';
 import '../widgets/fast_scroller.dart';
+import '../widgets/onboarding.dart';
 import 'word_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -58,6 +62,26 @@ class _HomeScreenState extends State<HomeScreen> {
       await App.downloads.initialize();
       if (!mounted) return;
       setState(() => _ready = true);
+      // Surface a silent downloader failure instead of degrading quietly.
+      if (CdnConfig.useCdn &&
+          !kIsWeb &&
+          (Platform.isAndroid || Platform.isIOS) &&
+          !App.downloads.active) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _snack('CDN không khả dụng — tải/phát trực tuyến bị tắt.');
+          }
+        });
+      }
+      // First launch: show the onboarding once (re-openable in settings).
+      if (!App.settings.introSeen) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          await Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => const OnboardingPage(), fullscreenDialog: true));
+          App.settings.setIntroSeen();
+        });
+      }
       // Warm the media manifest after the first frame so the first tap on a
       // word isn't slow (it's only file names; media bytes stay lazy).
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -119,6 +143,12 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     final n = await dl.deleteAll();
     _snack('Đã xoá $n video.');
+  }
+
+  Future<void> _showIntro() async {
+    await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => const OnboardingPage(), fullscreenDialog: true));
+    App.settings.setIntroSeen();
   }
 
   Future<void> _manualUpdateCheck() async {
@@ -498,6 +528,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                     },
                             ),
                           ],
+                        ),
+                        TextButton.icon(
+                          icon: const Icon(Icons.slideshow, size: 18),
+                          label: const Text('Xem lại hướng dẫn'),
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            _showIntro();
+                          },
                         ),
                       ],
                       const SizedBox(height: 16),

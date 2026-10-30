@@ -84,16 +84,19 @@ class SettingsService extends ChangeNotifier {
   static const _favoritesKey = 'vsl.favorites';
   static const _themeKey = 'vsl.theme';
   static const _checkUpdatesKey = 'vsl.check_updates';
+  static const _introKey = 'vsl.intro_seen';
 
   Region _defaultRegion = Region.north;
   Set<String> _favorites = {};
   ThemeChoice _theme = ThemeChoice.dark;
   bool _checkUpdates = true; // auto-check for content updates at startup
+  bool _introSeen = false; // first-launch onboarding shown
 
   Region get defaultRegion => _defaultRegion;
   Set<String> get favorites => _favorites;
   ThemeChoice get theme => _theme;
   bool get checkUpdates => _checkUpdates;
+  bool get introSeen => _introSeen;
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -103,6 +106,15 @@ class SettingsService extends ChangeNotifier {
     _theme = ThemeChoice.values.asNameMap()[prefs.getString(_themeKey)] ??
         ThemeChoice.dark;
     _checkUpdates = prefs.getBool(_checkUpdatesKey) ?? true;
+    _introSeen = prefs.getBool(_introKey) ?? false;
+  }
+
+  /// Marks the onboarding as seen (first-run intro and manual re-views).
+  Future<void> setIntroSeen() async {
+    if (_introSeen) return;
+    _introSeen = true;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_introKey, true);
   }
 
   Future<void> setCheckUpdates(bool on) async {
