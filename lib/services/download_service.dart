@@ -68,6 +68,7 @@ class DownloadService extends ChangeNotifier {
   final Map<String, TaskStatus> _status = {}; // name → TaskStatus
   final List<String> _failedNames = [];
   final Map<String, Completer<bool>> _waiters = {};
+  final Map<String, String> _taskGroups = {}; // name → notification group
 
   final Map<String, VideoEntry> _catalogByName = {};
 
@@ -201,17 +202,8 @@ class DownloadService extends ChangeNotifier {
         // Sign videos are tiny — run up to 10 concurrently so the whole
         // catalog downloads quickly.
         _dl.configure(globalConfig: (Config.holdingQueue, (10, null, null)));
-        // One merged notification for the whole batch, not one per file.
-        // Note: {numTotal} can't be used here — with a holding queue the
-        // plugin registers totals in WorkManager batches, so the pair creeps
-        // (50/100 → 100/150). numFinished is always accurate.
-        _dl.configureNotificationForGroup(
-          _taskGroup,
-          running: const TaskNotification(
-              'Đang tải từ điển', 'Đã tải xong {numFinished} video'),
-          error: const TaskNotification('Lỗi tải từ điển', '{numFailed} lỗi'),
-          groupNotificationId: 'vsl_dictionary_downloads',
-        );
+        // The batch notification text is (re)configured per batch inside
+        // enqueueAll — see the baked-total note there.
         final base = await getApplicationSupportDirectory();
         _root = '${base.path}/$_dirName';
         await Directory(_root).create(recursive: true);
@@ -307,6 +299,7 @@ class DownloadService extends ChangeNotifier {
         if (isFailure(update.status)) {
           _failedNames.add(name);
           _completeWaiter(name, false);
+          _taskGroups.remove(name);
         }
       }
     }
@@ -360,6 +353,7 @@ class DownloadService extends ChangeNotifier {
       _failedNames.add(name);
     }
     _completeWaiter(name, ok);
+    _taskGroups.remove(name);
     notifyListeners();
   }
 
@@ -388,6 +382,14 @@ class DownloadService extends ChangeNotifier {
           .request(PermissionType.notifications)
           .then<Object?>((_) => null));
     }
+    // Bake the true outstanding total into the notification text: the
+    // plugin's own {numTotal} trails (its registration jobs are batched by
+    // WorkManager), but {numFinished} is accurate and the total is known
+    // here, at enqueue time.
+    var outstanding = 0;
+    _taskGroups.forEach((n, g) {
+      if (g == taskGroup && isBusy(n)) outstanding++;
+    });
     var created = 0;
     final tasks = <DownloadTask>[];
     for (final e in entries) {
@@ -411,7 +413,21 @@ class DownloadService extends ChangeNotifier {
       );
       tasks.add(task);
       _expect[task.taskId] = e;
+      _taskGroups[e.name] = taskGroup;
       created++;
+    }
+    // iOS: a dynamic group text re-issues a notification per change — stay
+    // silent there (progress lives in the app). Android shows X/Y with the
+    // precalculated total; the silent play group never notifies.
+    if (!Platform.isIOS && taskGroup == _taskGroup && created > 0) {
+      final total = outstanding + created;
+      _dl.configureNotificationForGroup(
+        _taskGroup,
+        running: TaskNotification(
+            'Đang tải từ điển', 'Đã tải {numFinished}/$total'),
+        error: const TaskNotification('Lỗi tải từ điển', '{numFailed} lỗi'),
+        groupNotificationId: 'vsl_dictionary_downloads',
+      );
     }
     unawaited(_dl.enqueueAll(tasks));
     notifyListeners();
