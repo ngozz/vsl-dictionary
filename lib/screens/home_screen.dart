@@ -93,8 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _downloadAll() async {
     final dl = App.downloads;
-    if (!dl.active) return;
-    final remaining = dl.remainingEntries();
+    if (!dl.active) return;    final remaining = dl.remainingEntries();
     final bytes = remaining.fold(0, (a, e) => a + e.size);
     if (remaining.isEmpty) {
       _snack('Toàn bộ nội dung đã được tải về máy.');
@@ -111,6 +110,15 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     final started = dl.enqueueAll(remaining);
     _snack('Đã bắt đầu tải $started video…');
+  }
+
+  Future<void> _deleteAllData() async {
+    final dl = App.downloads;
+    if (dl.downloadedCount == 0) return;
+    if (!await DownloadDialogs.confirmDeleteAll(context, dl)) return;
+    if (!mounted) return;
+    final n = await dl.deleteAll();
+    _snack('Đã xoá $n video.');
   }
 
   Future<void> _manualUpdateCheck() async {
@@ -477,6 +485,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                   : () {
                                       Navigator.pop(sheetContext);
                                       _manualUpdateCheck();
+                                    },
+                            ),
+                            OutlinedButton.icon(
+                              icon: const Icon(Icons.delete_outline, size: 18),
+                              label: const Text('Xoá dữ liệu đã tải'),
+                              onPressed: dl.downloadedCount == 0
+                                  ? null
+                                  : () {
+                                      Navigator.pop(sheetContext);
+                                      _deleteAllData();
                                     },
                             ),
                           ],

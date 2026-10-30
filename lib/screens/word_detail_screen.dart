@@ -106,10 +106,27 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
       // The screen may have been popped mid-initialization.
       if (_disposed) return;
       await controller.setLooping(true);
-      // Speed must be applied AFTER play(): on iOS a setPlaybackSpeed before
-      // play() is silently dropped.
       await controller.play();
-      if (speed != 1.0) await controller.setPlaybackSpeed(speed);
+      if (speed != 1.0) {
+        await controller.setPlaybackSpeed(speed);
+        // iOS: AVPlayer resets the rate on play() (Apple's own TV app
+        // shares this quirk) — re-assert once playback is actually running.
+        var applied = false;
+        late final VoidCallback l;
+        l = () {
+          if (applied) {
+            controller.removeListener(l);
+            return;
+          }
+          final v = controller.value;
+          if (v.isPlaying && !v.isBuffering && v.position > Duration.zero) {
+            applied = true;
+            controller.removeListener(l);
+            controller.setPlaybackSpeed(speed);
+          }
+        };
+        controller.addListener(l);
+      }
       old?.dispose();
       if (mounted) setState(() {});
     }).catchError((Object e) {

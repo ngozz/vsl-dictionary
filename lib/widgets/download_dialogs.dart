@@ -18,6 +18,32 @@ abstract final class DownloadDialogs {
     return true;
   }
 
+  /// "Xoá tất cả dữ liệu đã tải?" — the cleanup confirmation.
+  static Future<bool> confirmDeleteAll(
+      BuildContext context, DownloadService dl) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Xoá dữ liệu đã tải'),
+            content: Text(
+                'Xoá ${dl.downloadedCount} video đã tải '
+                '(~${_fmtBytes(dl.downloadedBytes)})? '
+                'Video sẽ phát trực tuyến từ CDN.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Huỷ'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Xoá'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
   /// "Sẽ tải N video (~X MB)" — the big warning before download-all.
   static Future<bool> confirmBatch(
       BuildContext context, int fileCount, int bytes) async {

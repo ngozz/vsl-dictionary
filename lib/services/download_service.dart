@@ -210,6 +210,7 @@ class DownloadService extends ChangeNotifier {
           running: const TaskNotification(
               'Đang tải từ điển', 'Đã tải xong {numFinished} video'),
           error: const TaskNotification('Lỗi tải từ điển', '{numFailed} lỗi'),
+          groupNotificationId: 'vsl_dictionary_downloads',
         );
         final base = await getApplicationSupportDirectory();
         _root = '${base.path}/$_dirName';
@@ -448,6 +449,23 @@ class DownloadService extends ChangeNotifier {
     }
     if (removed > 0) notifyListeners();
     return removed;
+  }
+
+  /// Cancels in-flight tasks for [names]; downloaded copies are kept.
+  Future<void> cancelTasks(Iterable<String> names) async {
+    final ids = <String>[
+      for (final n in names)
+        if (isBusy(n)) '${_baseName(n)}.mp4',
+    ];
+    if (ids.isEmpty) return;
+    await _dl.cancelTasksWithIds(ids);
+  }
+
+  /// Deletes every downloaded copy, canceling in-flight tasks first.
+  /// Returns how many files were removed.
+  Future<int> deleteAll() async {
+    await cancelTasks(_catalogByName.keys);
+    return removeLocal(_downloaded.keys.toList());
   }
 
   // ── Network detection (Wi-Fi / mobile-data UX) ──────────────────────────
