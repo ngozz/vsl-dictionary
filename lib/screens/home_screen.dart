@@ -76,7 +76,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final q = value.trim();
     setState(() {
       _searchMode = q.isNotEmpty;
-      _results = q.isEmpty ? const [] : App.dictionary.search(q, typeFilter: _typeFilter);
+      // Untrimmed: a trailing space marks the last syllable complete
+      // ("do " matches "do Thái", not "doanh trại").
+      _results = q.isEmpty
+          ? const []
+          : App.dictionary.search(value, typeFilter: _typeFilter);
       _favoritesOnly = false;
     });
   }
@@ -85,7 +89,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _tab = t;
       if (_searchMode) {
-        _results = App.dictionary.search(_searchController.text.trim(), typeFilter: _typeFilter);
+        _results = App.dictionary.search(_searchController.text, typeFilter: _typeFilter);
       } else {
         _browseList = App.dictionary.browse(typeFilter: _typeFilter);
       }
@@ -531,6 +535,10 @@ class _WordTile extends StatelessWidget {
     final theme = Theme.of(context);
     final match = result.matchStart;
     final matchLen = result.matchLength;
+    // Highlight offsets come from the normalized text; clamp in case the raw
+    // string length differs (decomposed Unicode / irregular whitespace).
+    final hasHighlight =
+        match >= 0 && matchLen > 0 && match + matchLen <= w.word.length;
 
     return Center(
       child: Padding(
@@ -548,7 +556,7 @@ class _WordTile extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      child: match >= 0 && matchLen > 0
+                      child: hasHighlight
                           ? RichText(
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,

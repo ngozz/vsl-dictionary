@@ -59,8 +59,6 @@ class MediaService {
     }
     return out;
   }
-
-  bool hasImage(Word word) => imageAssets(word).isNotEmpty;
 }
 
 /// Favorites + default region + theme stored in shared_preferences.

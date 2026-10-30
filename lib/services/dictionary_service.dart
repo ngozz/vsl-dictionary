@@ -39,7 +39,6 @@ class DictionaryService {
   // one-letter queries don't flood the list.
   static const _minSubstringLen = 3;
 
-  bool get isLoaded => _loaded;
   int get count => _words.length;
 
   Future<void> load() async {

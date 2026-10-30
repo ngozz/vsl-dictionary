@@ -21,6 +21,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
   VideoVariant? _currentVariant;
   Future<void>? _initializeFuture;
   int _imageIndex = 0;
+  bool _disposed = false;
 
   /// New key per created surface; bumped after exiting fullscreen because on
   /// web the recycled platform view can end up with an empty texture.
@@ -36,6 +37,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
 
   @override
   void dispose() {
+    _disposed = true;
     _controller?.dispose();
     _restoreUi();
     super.dispose();
@@ -44,18 +46,17 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
   Future<void> _init() async {
     // Media manifest (file names only) is loaded lazily, on first word opened.
     await App.media.load();
+    if (_disposed) return;
     final v = App.media.bestVariant(
         _word.id, App.settings.defaultRegion.variant);
     if (v != null) {
       _selectVariant(v);
-    } else {
-      debugPrint('[VSL] no video variants available for ${_word.id}');
     }
   }
 
   void _selectVariant(VideoVariant v) {
+    if (_disposed) return;
     final asset = App.media.videoAsset(_word.id, v);
-    debugPrint('[VSL] play ${_word.id} variant=${v.name} asset=$asset');
     if (asset == null) return;
     // Carry the playback speed across variant switches so the 0.5× pill
     // stays in sync (it reads speed from the controller).
@@ -71,16 +72,21 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
         videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
     _controller = controller;
     _initializeFuture = controller.initialize().then((_) async {
+      // The screen may have been popped mid-initialization.
+      if (_disposed) return;
       await controller.setLooping(true);
       await controller.setPlaybackSpeed(speed);
       await controller.play();
       old?.dispose();
-      debugPrint('[VSL] ready ${_word.id} '
-          'size=${controller.value.size} dur=${controller.value.duration}');
       if (mounted) setState(() {});
     }).catchError((Object e) {
-      debugPrint('[VSL] INIT FAILED ${_word.id} ${v.name}: $e');
       old?.dispose();
+      if (_disposed) return;
+      // Drop the failed controller so the surface shows the empty state
+      // instead of an eternal spinner.
+      _controller = null;
+      _initializeFuture = null;
+      if (mounted) setState(() {});
     });
   }
 
@@ -125,6 +131,12 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Hoisted so variant switches / play-state rebuilds don't re-scan the
+    // asset manifest several times per build.
+    final images = App.media.imageAssets(_word);
+    final variants = VideoVariant.values
+        .where((v) => App.media.hasVideo(_word.id, v))
+        .toList();
     // Staying vertical in landscape too (no horizontal split): everything
     // centers and gets a width cap so the video never becomes a giant strip.
     final maxW = MediaQuery.of(context).size.width > 750 ? 980.0 : 720.0;
@@ -157,16 +169,16 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
-                      _regionSelector(),
+                      _regionSelector(variants),
                       const SizedBox(height: 12),
-                      _buildVideoBlock(),
+                      _buildVideoBlock(variants),
                       const SizedBox(height: 16),
                       if (_word.hasDescription()) ...[
                         _buildDescription(),
                         const SizedBox(height: 12),
                       ],
-                      if (App.media.imageAssets(_word).isNotEmpty) ...[
-                        _buildImages(),
+                      if (images.isNotEmpty) ...[
+                        _buildImages(images),
                         const SizedBox(height: 24),
                       ],
                     ]),
@@ -181,11 +193,9 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
   }
 
   // ---- Video block: FIXED 16:9 canvas; load state renders inside it ----
-  Widget _buildVideoBlock() {
-    final hasAny =
-        VideoVariant.values.any((v) => App.media.hasVideo(_word.id, v));
+  Widget _buildVideoBlock(List<VideoVariant> variants) {
     Widget inner;
-    if (!hasAny) {
+    if (variants.isEmpty) {
       inner = Icon(Icons.videocam_off_outlined,
           size: 48, color: Theme.of(context).colorScheme.outline);
     } else {
@@ -209,10 +219,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     );
   }
 
-  Widget _regionSelector() {
-    final variants = VideoVariant.values
-        .where((v) => App.media.hasVideo(_word.id, v))
-        .toList();
+  Widget _regionSelector(List<VideoVariant> variants) {
     if (variants.length <= 1) return const SizedBox.shrink();
     return SizedBox(
       width: double.infinity,
@@ -247,8 +254,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
         ),
       );
 
-  Widget _buildImages() {
-    final images = App.media.imageAssets(_word);
+  Widget _buildImages(List<String> images) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
       child: AspectRatio(
