@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
@@ -79,10 +81,22 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
             App.downloads.fileFor(App.media.videoName(_word.id, v)),
             videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
       case MediaSource.network when !forceAsset:
+        if (!kIsWeb && Platform.isIOS) {
+          // AVPlayer cannot play 200-only CDN streams: fetch the whole
+          // (tiny) video first, then play the local file. The previous
+          // variant keeps playing while the download runs.
+          _initializeFuture = _downloadThenPlay(v);
+          return;
+        }
         controller = VideoPlayerController.networkUrl(
             Uri.parse(
                 '${CdnConfig.baseUrl}/videos/${App.media.videoName(_word.id, v)}.mp4'),
             videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
+        // Android: keep a silent offline copy of watched words.
+        if (!kIsWeb && Platform.isAndroid) {
+          unawaited(App.downloads
+              .ensureDownloaded(App.media.videoName(_word.id, v)));
+        }
       default: // bundled asset (FULL build, or web fallback)
         controller = VideoPlayerController.asset(asset!,
             videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
@@ -110,6 +124,25 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
       _initializeFuture = null;
       if (mounted) setState(() {});
     });
+  }
+
+  /// iOS path: fetch the whole (tiny) video, then play the local file. The
+  /// surface shows its spinner while this runs (controller stays null).
+  Future<void> _downloadThenPlay(VideoVariant v) async {
+    final ok = await App.downloads
+        .ensureDownloaded(App.media.videoName(_word.id, v));
+    if (_disposed) return;
+    if (!ok ||
+        !mounted ||
+        App.media.videoSource(_word.id, v) != MediaSource.localFile) {
+      // Show the empty state instead of an eternal spinner.
+      setState(() {
+        _controller = null;
+        _initializeFuture = null;
+      });
+      return;
+    }
+    _selectVariant(v); // now resolves to the downloaded local file
   }
 
   Future<void> _toggleSlow() async {

@@ -50,6 +50,7 @@ class VideoEntry {
 class DownloadService extends ChangeNotifier {
   static const _dirName = 'videos';
   static const _taskGroup = 'vsl_downloads';
+  static const _playGroup = 'vsl_play'; // play-triggered: never notifies
 
   DownloadService._();
   static DownloadService? _instance;
@@ -66,6 +67,7 @@ class DownloadService extends ChangeNotifier {
   final Map<String, double> _progress = {}; // name → 0..1
   final Map<String, TaskStatus> _status = {}; // name → TaskStatus
   final List<String> _failedNames = [];
+  final Map<String, Completer<bool>> _waiters = {};
 
   final Map<String, VideoEntry> _catalogByName = {};
 
@@ -82,6 +84,11 @@ class DownloadService extends ChangeNotifier {
   Set<String> get downloadedNames => _downloaded.keys.toSet();
   int get catalogCount => _catalogByName.length;
   List<String> get failedNames => _failedNames.toList();
+
+  /// True once the user confirmed a download on mobile data this session;
+  /// the warning is skipped for the rest of the session and resets on app
+  /// start (plain field).
+  bool mobileDataConfirmedThisSession = false;
 
   bool isDownloaded(String name) => _downloaded.containsKey(name);
 
@@ -110,6 +117,47 @@ class DownloadService extends ChangeNotifier {
       return name.substring(0, name.length - 4);
     }
     return name;
+  }
+
+  /// Whether a verified, size-matching local copy exists right now.
+  bool hasPlayableLocal(String name) {
+    final n = _baseName(name);
+    final meta = _downloaded[n];
+    if (meta == null) return false;
+    try {
+      final f = fileFor(n);
+      return f.existsSync() && f.lengthSync() == meta.size;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Resolves when [name] reaches a terminal state: true = verified local
+  /// copy ready to play; false = failed/canceled/verification error.
+  Future<bool> waitFor(String name) {
+    final n = _baseName(name);
+    if (hasPlayableLocal(n)) return Future.value(true);
+    final s = _status[n];
+    if (s != null && isFailure(s)) return Future.value(false);
+    return _waiters.putIfAbsent(n, () => Completer<bool>()).future;
+  }
+
+  void _completeWaiter(String name, bool ok) {
+    _waiters.remove(name)?.complete(ok);
+  }
+
+  /// Makes sure [name] has a verified local copy, downloading it silently if
+  /// needed (play-triggered tasks never notify). True when ready to play.
+  /// iOS uses this to fetch before playback (AVPlayer cannot play 200-only
+  /// streams); Android uses it to keep an offline copy of watched words.
+  Future<bool> ensureDownloaded(String name) async {
+    if (!_active) return false;
+    final n = _baseName(name);
+    if (hasPlayableLocal(n)) return true;
+    final entry = _catalogByName[n];
+    enqueueAll([entry ?? VideoEntry(name: n, size: 0, sha256: '')],
+        group: _playGroup);
+    return waitFor(n);
   }
 
   /// Resolves how a video filename plays.
@@ -257,7 +305,10 @@ class DownloadService extends ChangeNotifier {
         unawaited(_finish(name, update.task));
       } else {
         if (!_isBusy(update.status)) _progress.remove(name);
-        if (isFailure(update.status)) _failedNames.add(name);
+        if (isFailure(update.status)) {
+          _failedNames.add(name);
+          _completeWaiter(name, false);
+        }
       }
     }
     notifyListeners();
@@ -276,6 +327,7 @@ class DownloadService extends ChangeNotifier {
       s == TaskStatus.notFound;
 
   Future<void> _finish(String name, Task task) async {
+    var ok = true;
     try {
       final file = fileFor(name);
       if (!file.existsSync()) {
@@ -300,6 +352,7 @@ class DownloadService extends ChangeNotifier {
           jsonEncode({'name': name, 'size': actual, 'sha256': sha}));
       _progress.remove(name);
     } catch (e) {
+      ok = false;
       debugPrint('[DOWNLOAD] verify failed: $e');
       try {
         final f = fileFor(name);
@@ -307,6 +360,7 @@ class DownloadService extends ChangeNotifier {
       } catch (_) {}
       _failedNames.add(name);
     }
+    _completeWaiter(name, ok);
     notifyListeners();
   }
 
@@ -324,10 +378,12 @@ class DownloadService extends ChangeNotifier {
   /// Downloads [entries], skipping already-downloaded/busy ones and discarding
   /// old copies first (so "changed content" replaces them). Returns how many
   /// tasks were created. Downloads continue after app close (WorkManager on
-  /// Android, background URLSession on iOS).
-  int enqueueAll(List<VideoEntry> entries) {
+  /// Android, background URLSession on iOS). The default group shows the
+  /// merged batch notification; the play group stays silent.
+  int enqueueAll(List<VideoEntry> entries, {String? group}) {
     if (!_active || entries.isEmpty) return 0;
-    if (_askNotifications) {
+    final taskGroup = group ?? _taskGroup;
+    if (_askNotifications && taskGroup == _taskGroup) {
       _askNotifications = false;
       unawaited(_dl.permissions
           .request(PermissionType.notifications)
@@ -346,7 +402,7 @@ class DownloadService extends ChangeNotifier {
       _progress[e.name] = 0;
       final task = DownloadTask(
         taskId: '${e.name}.mp4',
-        group: _taskGroup,
+        group: taskGroup,
         url: '${CdnConfig.baseUrl}/videos/${e.name}.mp4',
         filename: '${e.name}.mp4',
         baseDirectory: BaseDirectory.applicationSupport,
