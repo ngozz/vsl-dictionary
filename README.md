@@ -17,8 +17,9 @@ Language Dictionary at [qipedc.moet.gov.vn/dictionary](https://qipedc.moet.gov.v
   description and illustration images.
 - **Personal touches** — favorites, default region preference, three themes
   (Tối / Đen / Sáng, green-seeded Material 3), interface in Vietnamese.
-- **Fully offline** — all media is bundled in the app. A CDN/streaming mode is
-  planned (the media layer is already URL-shaped for it).
+- **Fully offline capable** — sign videos stream from the CDN by default
+  (small ~25 MB APK) and can be downloaded in-app for a fully offline
+  library; a FULL variant (~600 MB APK) bundles everything instead.
 
 ## Project layout
 
@@ -56,15 +57,19 @@ flutter build ios --no-codesign     # iOS (needs Xcode + macOS)
 
 | Trigger | Effect |
 |---|---|
-| Push commit whose **message contains `[build]`** | Full build: Android APK + Web + unsigned iOS IPA |
+| Push commit whose **message contains `[build]`** | Builds **both variants**: Android APK + unsigned iOS IPA + Web |
 | **Manual** (`workflow_dispatch`) | Same, any time |
 | Any other push | CI skipped on purpose |
 
-Each build run **creates a GitHub Release** (`v<run-number>`) containing:
+Each build run **creates a GitHub Release** (`v<run-number>`) containing
+**both variants**, built from the same commit:
 
-- `vsl-dictionary-android.apk` — sideload-ready
-- `vsl-dictionary-ios-unsigned.ipa` — not code-signed; resign or use a
-  sideload tool (e.g. AltStore, Sideloadly) to install
+- `vsl-dictionary-android.apk` — SMALL (CDN): streams sign videos from the
+  media host, downloads them in-app for offline use
+- `vsl-dictionary-android-full.apk` — FULL: all media bundled (~600 MB)
+- `vsl-dictionary-ios-unsigned.ipa` — SMALL (CDN); the SideStore/AltStore
+  source points here
+- `vsl-dictionary-ios-full-unsigned.ipa` — FULL: all media bundled
 - `vsl-dictionary-web.zip` — static web build
 
 The web artifact is also **deployed to GitHub Pages** automatically on each
@@ -72,9 +77,26 @@ The web artifact is also **deployed to GitHub Pages** automatically on each
 `/<repo>/`). The online app is available at
 `https://ngozz.github.io/vsl-dictionary/`.
 
+## CDN mode (SMALL builds)
+
+Sign videos stream from `https://vsl-dictionary-media.ngozz.workers.dev`
+(Cloudflare Workers static assets, free tier). Resolution order: downloaded
+copy → CDN stream → bundled asset. `tools/toggle_videos.ps1` flips between
+variants (pubspec asset line + `lib/config.dart` together); CI runs it
+twice per release to build both.
+
+- **Download all** (Settings → Tải xuống & cập nhật): ~513 MB into app
+  storage with size+SHA-256 verification before promotion; re-running only
+  enqueues the delta.
+- **Update check**: at startup (toggleable) or manually — compares manifest
+  sizes against local copies and prompts before re-downloading anything.
+- **Web**: streams CDN-first; if the CDN fails for a video, the player
+  retries it from the bundled GitHub Pages copy.
+
 The iOS build can be added to SideStore or AltStore using this source:
-`https://ngozz.github.io/vsl-dictionary/altstore-source.json`. It points to the
-latest unsigned IPA release; SideStore/AltStore signs it during installation.
+`https://ngozz.github.io/vsl-dictionary/altstore-source.json`. It points to
+the latest **small** unsigned IPA release (offline comes from in-app
+downloads); SideStore/AltStore signs it during installation.
 
 ### Repo setup notes
 

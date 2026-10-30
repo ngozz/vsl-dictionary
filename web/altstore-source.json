@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "VSL Dictionary",
   "identifier": "ngozz.vsl-dictionary",
   "apps": [
@@ -13,7 +13,7 @@
         {
           "version": "1.0.0",
           "buildVersion": "1",
-          "date": "2026-10-28T00:00:00Z",
+          "date": "2026-10-30T00:00:00Z",
           "downloadURL": "https://github.com/ngozz/vsl-dictionary/releases/latest/download/vsl-dictionary-ios-unsigned.ipa"
         }
       ]

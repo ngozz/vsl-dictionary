@@ -6,6 +6,8 @@ import 'package:video_player/video_player.dart';
 
 import '../main.dart';
 import '../models/word.dart';
+import '../config.dart' show CdnConfig;
+import '../services/download_service.dart' show MediaSource;
 import 'home_screen.dart' show FavoriteIcon;
 
 class WordDetailScreen extends StatefulWidget {
@@ -54,10 +56,12 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     }
   }
 
-  void _selectVariant(VideoVariant v) {
+  void _selectVariant(VideoVariant v, {bool forceAsset = false}) {
     if (_disposed) return;
     final asset = App.media.videoAsset(_word.id, v);
-    if (asset == null) return;
+    final src = App.media.videoSource(_word.id, v);
+    if (src == MediaSource.asset && asset == null) return;
+    if (src == MediaSource.network && forceAsset && asset == null) return;
     // Carry the playback speed across variant switches so the 0.5× pill
     // stays in sync (it reads speed from the controller).
     final speed = _controller?.value.playbackSpeed ?? 1.0;
@@ -68,8 +72,21 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     final old = _controller;
     // mixWithOthers: videos are silent; never steal audio focus from other
     // apps (e.g. interrupt Spotify) when the player initializes on iOS.
-    final controller = VideoPlayerController.asset(asset,
-        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
+    final VideoPlayerController controller;
+    switch (src) {
+      case MediaSource.localFile:
+        controller = VideoPlayerController.file(
+            App.downloads.fileFor(App.media.videoName(_word.id, v)),
+            videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
+      case MediaSource.network when !forceAsset:
+        controller = VideoPlayerController.networkUrl(
+            Uri.parse(
+                '${CdnConfig.baseUrl}/videos/${App.media.videoName(_word.id, v)}.mp4'),
+            videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
+      default: // bundled asset (FULL build, or web fallback)
+        controller = VideoPlayerController.asset(asset!,
+            videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
+    }
     _controller = controller;
     _initializeFuture = controller.initialize().then((_) async {
       // The screen may have been popped mid-initialization.
@@ -82,6 +99,11 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     }).catchError((Object e) {
       old?.dispose();
       if (_disposed) return;
+      // Web (bundled) fallback: the CDN failed → retry from bundled assets.
+      if (!forceAsset && src == MediaSource.network && asset != null) {
+        _selectVariant(v, forceAsset: true);
+        return;
+      }
       // Drop the failed controller so the surface shows the empty state
       // instead of an eternal spinner.
       _controller = null;

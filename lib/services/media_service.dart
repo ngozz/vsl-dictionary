@@ -2,7 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config.dart' show CdnConfig;
 import '../models/word.dart';
+import 'download_service.dart';
 
 /// Resolves media assets for a word.
 ///
@@ -32,8 +34,21 @@ class MediaService {
   }
 
   /// Whether this word has a video for the given variant.
-  bool hasVideo(String wordId, VideoVariant variant) =>
-      videoAsset(wordId, variant) != null;
+  bool hasVideo(String wordId, VideoVariant variant) {
+    if (videoAsset(wordId, variant) != null) return true;
+    // CDN mode / web: the video exists even when its asset is not bundled —
+    // the catalog (bundled manifest) knows.
+    return (CdnConfig.useCdn || kIsWeb) &&
+        DownloadService().canStream(videoName(wordId, variant));
+  }
+
+  /// File name without extension for a variant's video ('12345B').
+  String videoName(String wordId, VideoVariant variant) =>
+      variant.videoAssetBasename(wordId);
+
+  /// How this variant's video plays (downloaded → stream → asset).
+  MediaSource videoSource(String wordId, VideoVariant variant) =>
+      DownloadService().resolve(videoName(wordId, variant));
 
   /// Best available variant, preferring the user's default region.
   VideoVariant? bestVariant(String wordId, VideoVariant preferred) {
@@ -68,14 +83,17 @@ class SettingsService extends ChangeNotifier {
   static const _regionKey = 'vsl.default_region';
   static const _favoritesKey = 'vsl.favorites';
   static const _themeKey = 'vsl.theme';
+  static const _checkUpdatesKey = 'vsl.check_updates';
 
   Region _defaultRegion = Region.north;
   Set<String> _favorites = {};
   ThemeChoice _theme = ThemeChoice.dark;
+  bool _checkUpdates = true; // auto-check for content updates at startup
 
   Region get defaultRegion => _defaultRegion;
   Set<String> get favorites => _favorites;
   ThemeChoice get theme => _theme;
+  bool get checkUpdates => _checkUpdates;
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -84,6 +102,15 @@ class SettingsService extends ChangeNotifier {
     _favorites = (prefs.getStringList(_favoritesKey) ?? const []).toSet();
     _theme = ThemeChoice.values.asNameMap()[prefs.getString(_themeKey)] ??
         ThemeChoice.dark;
+    _checkUpdates = prefs.getBool(_checkUpdatesKey) ?? true;
+  }
+
+  Future<void> setCheckUpdates(bool on) async {
+    if (on == _checkUpdates) return;
+    _checkUpdates = on;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_checkUpdatesKey, on);
   }
 
   Future<void> setTheme(ThemeChoice choice) async {

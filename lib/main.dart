@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 
 import 'screens/home_screen.dart';
 import 'services/dictionary_service.dart';
+import 'services/download_service.dart';
 import 'services/media_service.dart';
+import 'services/update_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -151,4 +153,6 @@ class App {
   static final DictionaryService dictionary = DictionaryService();
   static final MediaService media = MediaService.instance;
   static final SettingsService settings = SettingsService();
+  static final downloads = DownloadService();
+  static final updates = UpdateService();
 }

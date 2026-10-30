@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../main.dart';
 import '../models/word.dart';
 import '../services/dictionary_service.dart';
 import '../services/media_service.dart' show ThemeChoice;
+import '../widgets/download_dialogs.dart';
 import '../widgets/fast_scroller.dart';
 import 'word_detail_screen.dart';
 
@@ -28,11 +31,11 @@ class _HomeScreenState extends State<HomeScreen> {
   HomeTab _tab = HomeTab.all;
 
   String? get _typeFilter => switch (_tab) {
-        HomeTab.words => '0',
-        HomeTab.numbers => '1',
-        HomeTab.alphabet => '2',
-        _ => null,
-      };
+    HomeTab.words => '0',
+    HomeTab.numbers => '1',
+    HomeTab.alphabet => '2',
+    _ => null,
+  };
 
   @override
   void initState() {
@@ -50,11 +53,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _init() async {
     try {
-      await Future.wait([
-        App.dictionary.load(),
-        App.settings.load(),
-      ]);
+      await Future.wait([App.dictionary.load(), App.settings.load()]);
       _browseList = App.dictionary.browse(typeFilter: _typeFilter);
+      await App.downloads.initialize();
       if (!mounted) return;
       setState(() => _ready = true);
       // Warm the media manifest after the first frame so the first tap on a
@@ -63,9 +64,79 @@ class _HomeScreenState extends State<HomeScreen> {
         await App.media.load();
         if (mounted) setState(() {});
       });
+      // Auto-*check* at startup (cheap manifest fetch); applying is manual.
+      if (App.downloads.active && App.settings.checkUpdates) {
+        unawaited(_startupUpdateCheck());
+      }
     } catch (e) {
-      if (mounted) setState(() { _error = '$e'; _ready = true; });
+      if (mounted) {
+        setState(() {
+          _error = '$e';
+          _ready = true;
+        });
+      }
     }
+  }
+
+  Future<void> _startupUpdateCheck() async {
+    await App.updates.check();
+    final changed = App.updates.changedEntriesFor(App.downloads);
+    if (!mounted || changed.isEmpty || App.updates.dismissedThisSession) {
+      return;
+    }
+    await DownloadDialogs.showUpdatePrompt(
+      context,
+      changed.length,
+      changed.fold(0, (a, e) => a + e.size),
+    );
+  }
+
+  Future<void> _downloadAll() async {
+    final dl = App.downloads;
+    if (!dl.active) return;
+    final remaining = dl.remainingEntries();
+    final bytes = remaining.fold(0, (a, e) => a + e.size);
+    if (remaining.isEmpty) {
+      _snack('Toàn bộ nội dung đã được tải về máy.');
+      return;
+    }
+    if (!await DownloadDialogs.confirmBatch(context, remaining.length, bytes)) {
+      return;
+    }
+    if (!mounted) return;
+    final wifi = await dl.onWifi();
+    if (!mounted) return;
+    if (!wifi && !(await DownloadDialogs.confirmMobileData(context, bytes))) {
+      _snack('Sẽ tải khi có Wi-Fi (mở lại màn hình này).');
+      return;
+    }
+    if (!mounted) return;
+    final started = dl.enqueueAll(remaining);
+    _snack('Đã bắt đầu tải $started video…');
+  }
+
+  Future<void> _manualUpdateCheck() async {
+    await App.updates.check();
+    if (App.updates.lastError != null) {
+      _snack('Không thể kiểm tra: ${App.updates.lastError}');
+      return;
+    }
+    final changed = App.updates.changedEntriesFor(App.downloads);
+    if (!mounted) return;
+    if (changed.isEmpty) {
+      _snack('Nội dung đã là bản mới nhất.');
+      return;
+    }
+    await DownloadDialogs.showUpdatePrompt(
+      context,
+      changed.length,
+      changed.fold(0, (a, e) => a + e.size),
+    );
+  }
+
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   void _onSettingsChanged() {
@@ -89,7 +160,10 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _tab = t;
       if (_searchMode) {
-        _results = App.dictionary.search(_searchController.text, typeFilter: _typeFilter);
+        _results = App.dictionary.search(
+          _searchController.text,
+          typeFilter: _typeFilter,
+        );
       } else {
         _browseList = App.dictionary.browse(typeFilter: _typeFilter);
       }
@@ -100,13 +174,16 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (_, _, _) => WordDetailScreen(word: w),
-        transitionsBuilder: (_, anim, _, child) =>
-            FadeTransition(opacity: anim, child: SlideTransition(
-              position: Tween(begin: const Offset(0, .02), end: Offset.zero)
-                  .chain(CurveTween(curve: Curves.easeOutCubic))
-                  .animate(anim),
-              child: child,
-            )),
+        transitionsBuilder: (_, anim, _, child) => FadeTransition(
+          opacity: anim,
+          child: SlideTransition(
+            position: Tween(
+              begin: const Offset(0, .02),
+              end: Offset.zero,
+            ).chain(CurveTween(curve: Curves.easeOutCubic)).animate(anim),
+            child: child,
+          ),
+        ),
       ),
     );
   }
@@ -120,8 +197,10 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.transparent,
         centerTitle: false,
         elevation: 0,
-        title: const Text('Từ điển Ký hiệu',
-            style: TextStyle(fontWeight: FontWeight.w700, height: 1.0)),
+        title: const Text(
+          'Từ điển Ký hiệu',
+          style: TextStyle(fontWeight: FontWeight.w700, height: 1.0),
+        ),
         actions: [
           IconButton(
             tooltip: _favoritesOnly ? 'Xem tất cả' : 'Xem yêu thích',
@@ -145,58 +224,59 @@ class _HomeScreenState extends State<HomeScreen> {
       body: !_ready
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
-                  child: Text('Lỗi tải dữ liệu:\n$_error',
-                      textAlign: TextAlign.center))
-              : SafeArea(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 720),
-                      child: Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                            child: TextField(
-                              controller: _searchController,
-                              onChanged: _onSearchChanged,
-                              textInputAction: TextInputAction.search,
-                              decoration: InputDecoration(
-                                hintText: 'Tìm từ…',
-                                prefixIcon: const Icon(Icons.search),
-                                suffixIcon: _searchMode
-                                    ? IconButton(
-                                        icon: const Icon(Icons.close),
-                                        onPressed: () {
-                                          _searchController.clear();
-                                          setState(() {
-                                            _searchMode = false;
-                                            _results = const [];
-                                          });
-                                        },
-                                      )
-                                    : null,
-                                filled: true,
-                                fillColor:
-                                    theme.colorScheme.surfaceContainerHighest,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: BorderSide.none,
-                                ),
-                                contentPadding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                              ),
+          ? Center(
+              child: Text(
+                'Lỗi tải dữ liệu:\n$_error',
+                textAlign: TextAlign.center,
+              ),
+            )
+          : SafeArea(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: _onSearchChanged,
+                          textInputAction: TextInputAction.search,
+                          decoration: InputDecoration(
+                            hintText: 'Tìm từ…',
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: _searchMode
+                                ? IconButton(
+                                    icon: const Icon(Icons.close),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() {
+                                        _searchMode = false;
+                                        _results = const [];
+                                      });
+                                    },
+                                  )
+                                : null,
+                            filled: true,
+                            fillColor:
+                                theme.colorScheme.surfaceContainerHighest,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 14,
                             ),
                           ),
-                          _CategoryTabs(
-                            selected: _tab,
-                            onSelected: _setTab,
-                          ),
-                          Expanded(child: _buildList()),
-                        ],
+                        ),
                       ),
-                    ),
+                      _CategoryTabs(selected: _tab, onSelected: _setTab),
+                      Expanded(child: _buildList()),
+                    ],
                   ),
                 ),
+              ),
+            ),
     );
   }
 
@@ -204,8 +284,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_searchMode) {
       if (_results.isEmpty) {
         return Center(
-          child: Text('Không tìm thấy “${_searchController.text.trim()}”',
-              style: Theme.of(context).textTheme.bodyLarge),
+          child: Text(
+            'Không tìm thấy “${_searchController.text.trim()}”',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
         );
       }
       return ListView.builder(
@@ -216,19 +298,24 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
     if (_favoritesOnly) {
-      final favs =
-          _browseList.where((w) => App.settings.isFavorite(w)).toList();
+      final favs = _browseList
+          .where((w) => App.settings.isFavorite(w))
+          .toList();
       if (favs.isEmpty) {
         return Center(
-          child: Text('Chưa có từ nào được yêu thích',
-              style: Theme.of(context).textTheme.bodyLarge),
+          child: Text(
+            'Chưa có từ nào được yêu thích',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
         );
       }
       return ListView.builder(
         itemExtent: 64,
         itemCount: favs.length,
-        itemBuilder: (_, i) =>
-            _WordTile(SearchResult(favs[i], -1, 0, 0), onTap: () => _openWord(favs[i])),
+        itemBuilder: (_, i) => _WordTile(
+          SearchResult(favs[i], -1, 0, 0),
+          onTap: () => _openWord(favs[i]),
+        ),
       );
     }
     if (_browseList.isEmpty) {
@@ -249,88 +336,184 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       showDragHandle: true,
       builder: (sheetContext) {
-        final theme = Theme.of(sheetContext);
         return AnimatedBuilder(
-          animation: App.settings,
-          builder: (sheetContext, _) => SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Cài đặt', style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 16),
-                  Text('Vùng ký hiệu mặc định',
-                      style: theme.textTheme.bodySmall),
-                  const SizedBox(height: 8),
-                  SegmentedButton<Region>(
-                    showSelectedIcon: false, // no width change on select
-                    segments: const [
-                      ButtonSegment(
-                          value: Region.north,
-                          label: SizedBox(
-                              width: 60, child: Center(child: Text('Bắc')))),
-                      ButtonSegment(
-                          value: Region.central,
-                          label: SizedBox(
-                              width: 60, child: Center(child: Text('Trung')))),
-                      ButtonSegment(
-                          value: Region.south,
-                          label: SizedBox(
-                              width: 60, child: Center(child: Text('Nam')))),
+          animation: Listenable.merge([
+            App.settings,
+            App.downloads,
+            App.updates,
+          ]),
+          builder: (sheetContext, _) {
+            final theme = Theme.of(sheetContext);
+            final dl = App.downloads;
+            final optionTitle = theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            );
+            final muted = theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            );
+            return SafeArea(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Cài đặt', style: theme.textTheme.titleLarge),
+                      const SizedBox(height: 16),
+                      Text('Vùng ký hiệu mặc định', style: optionTitle),
+                      const SizedBox(height: 8),
+                      SegmentedButton<Region>(
+                        showSelectedIcon: false, // no width change on select
+                        segments: const [
+                          ButtonSegment(
+                            value: Region.north,
+                            label: SizedBox(
+                              width: 60,
+                              child: Center(child: Text('Bắc')),
+                            ),
+                          ),
+                          ButtonSegment(
+                            value: Region.central,
+                            label: SizedBox(
+                              width: 60,
+                              child: Center(child: Text('Trung')),
+                            ),
+                          ),
+                          ButtonSegment(
+                            value: Region.south,
+                            label: SizedBox(
+                              width: 60,
+                              child: Center(child: Text('Nam')),
+                            ),
+                          ),
+                        ],
+                        selected: {App.settings.defaultRegion},
+                        onSelectionChanged: (sel) =>
+                            App.settings.setDefaultRegion(sel.first),
+                      ),
+                      const SizedBox(height: 20),
+                      Text('Giao diện', style: optionTitle),
+                      const SizedBox(height: 8),
+                      SegmentedButton<ThemeChoice>(
+                        showSelectedIcon: false, // no width change on select
+                        segments: const [
+                          ButtonSegment(
+                            value: ThemeChoice.dark,
+                            label: SizedBox(
+                              width: 52,
+                              child: Center(child: Text('Tối')),
+                            ),
+                          ),
+                          ButtonSegment(
+                            value: ThemeChoice.black,
+                            label: SizedBox(
+                              width: 52,
+                              child: Center(child: Text('Đen')),
+                            ),
+                          ),
+                          ButtonSegment(
+                            value: ThemeChoice.light,
+                            label: SizedBox(
+                              width: 52,
+                              child: Center(child: Text('Sáng')),
+                            ),
+                          ),
+                        ],
+                        selected: {App.settings.theme},
+                        onSelectionChanged: (sel) =>
+                            App.settings.setTheme(sel.first),
+                      ),
+                      if (dl.active) ...[
+                        const SizedBox(height: 20),
+                        Text('Tải xuống & cập nhật', style: optionTitle),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Đã tải: ${dl.downloadedCount}/${dl.catalogCount} video '
+                          '(${_fmtMB(dl.downloadedBytes)})',
+                          style: muted,
+                        ),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: Text(
+                            'Kiểm tra cập nhật khi mở ứng dụng',
+                            style: optionTitle,
+                          ),
+                          subtitle: Text(
+                            'Tắt = app hoàn toàn ngoại tuyến sau khi đã tải',
+                            style: muted,
+                          ),
+                          value: App.settings.checkUpdates,
+                          onChanged: (v) => App.settings.setCheckUpdates(v),
+                        ),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            OutlinedButton.icon(
+                              icon: const Icon(
+                                Icons.download_for_offline_outlined,
+                                size: 18,
+                              ),
+                              label: const Text('Tải toàn bộ từ điển'),
+                              onPressed: () {
+                                Navigator.pop(sheetContext);
+                                _downloadAll();
+                              },
+                            ),
+                            OutlinedButton.icon(
+                              icon: App.updates.checking
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.sync, size: 18),
+                              label: const Text('Kiểm tra cập nhật'),
+                              onPressed: App.updates.checking
+                                  ? null
+                                  : () {
+                                      Navigator.pop(sheetContext);
+                                      _manualUpdateCheck();
+                                    },
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      Text(
+                        'Số từ: ${App.dictionary.count}\n\n'
+                        'Dữ liệu từ dự án “NgonTay”.',
+                        style: muted,
+                      ),
                     ],
-                    selected: {App.settings.defaultRegion},
-                    onSelectionChanged: (sel) =>
-                        App.settings.setDefaultRegion(sel.first),
                   ),
-                  const SizedBox(height: 20),
-                  Text('Giao diện', style: theme.textTheme.bodySmall),
-                  const SizedBox(height: 8),
-                  SegmentedButton<ThemeChoice>(
-                    showSelectedIcon: false, // no width change on select
-                    segments: const [
-                      ButtonSegment(
-                          value: ThemeChoice.dark,
-                          label: SizedBox(
-                              width: 52, child: Center(child: Text('Tối')))),
-                      ButtonSegment(
-                          value: ThemeChoice.black,
-                          label: SizedBox(
-                              width: 52, child: Center(child: Text('Đen')))),
-                      ButtonSegment(
-                          value: ThemeChoice.light,
-                          label: SizedBox(
-                              width: 52, child: Center(child: Text('Sáng')))),
-                    ],
-                    selected: {App.settings.theme},
-                    onSelectionChanged: (sel) =>
-                        App.settings.setTheme(sel.first),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Số từ: ${App.dictionary.count}\n\n'
-                    'Ứng dụng dùng làm cá nhân — dữ liệu từ dự án “NgonTay”.',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
   }
 }
 
+String _fmtMB(int b) {
+  if (b <= 0) return '0 MB';
+  final mb = b / 1048576;
+  if (mb >= 1024) return '${(mb / 1024).toStringAsFixed(1)} GB';
+  return '${mb.round()} MB';
+}
+
 class _CategoryTabs extends StatelessWidget {
   final HomeTab selected;
   final ValueChanged<HomeTab> onSelected;
 
-  const _CategoryTabs({
-    required this.selected,
-    required this.onSelected,
-  });
+  const _CategoryTabs({required this.selected, required this.onSelected});
 
   @override
   Widget build(BuildContext context) {
@@ -345,7 +528,9 @@ class _CategoryTabs extends StatelessWidget {
           showCheckmark: false,
           labelStyle: TextStyle(
             fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
-            color: sel ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface,
+            color: sel
+                ? theme.colorScheme.onPrimary
+                : theme.colorScheme.onSurface,
           ),
           selectedColor: theme.colorScheme.primary,
           onSelected: (_) => onSelected(t),
@@ -356,12 +541,14 @@ class _CategoryTabs extends StatelessWidget {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(children: [
-        chip(HomeTab.all, 'Tất cả'),
-        chip(HomeTab.words, 'Từ vựng'),
-        chip(HomeTab.numbers, 'Số đếm'),
-        chip(HomeTab.alphabet, 'Bảng chữ cái'),
-      ]),
+      child: Row(
+        children: [
+          chip(HomeTab.all, 'Tất cả'),
+          chip(HomeTab.words, 'Từ vựng'),
+          chip(HomeTab.numbers, 'Số đếm'),
+          chip(HomeTab.alphabet, 'Bảng chữ cái'),
+        ],
+      ),
     );
   }
 }
@@ -397,7 +584,8 @@ class _GroupedBrowseListState extends State<_GroupedBrowseList> {
   final ScrollController _scroll = ScrollController();
   List<_Row> _rows = const [];
   List<String> _railLetters = const [];
-  List<double> _sectionOffsets = const []; // scroll offset where each section starts
+  List<double> _sectionOffsets =
+      const []; // scroll offset where each section starts
 
   @override
   void initState() {
@@ -586,16 +774,18 @@ class _WordTile extends StatelessWidget {
                                 children: [
                                   TextSpan(text: w.word.substring(0, match)),
                                   TextSpan(
-                                    text:
-                                        w.word.substring(match, match + matchLen),
+                                    text: w.word.substring(
+                                      match,
+                                      match + matchLen,
+                                    ),
                                     style: TextStyle(
                                       color: theme.colorScheme.error,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
                                   TextSpan(
-                                      text: w.word
-                                          .substring(match + matchLen)),
+                                    text: w.word.substring(match + matchLen),
+                                  ),
                                 ],
                               ),
                             )
@@ -609,7 +799,10 @@ class _WordTile extends StatelessWidget {
                             ),
                     ),
                     const SizedBox(width: 6),
-                    FavoriteIcon(word: w, padding: const EdgeInsets.only(right: 8)),
+                    FavoriteIcon(
+                      word: w,
+                      padding: const EdgeInsets.only(right: 8),
+                    ),
                   ],
                 ),
               ),

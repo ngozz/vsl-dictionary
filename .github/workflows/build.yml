@@ -61,7 +61,7 @@ jobs:
         run: flutter analyze
 
   build-web:
-    name: Build Web
+    name: Build Web (bundled, streams CDN-first)
     needs: [check, analyze]
     if: needs.check.outputs.should_run == 'true'
     runs-on: ubuntu-latest
@@ -75,8 +75,11 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Install dependencies
-        run: flutter pub get
+      # Web keeps the media bundled so GitHub Pages can serve as the
+      # per-video fallback when the CDN is unreachable.
+      - name: Switch to FULL (bundled) build
+        shell: pwsh
+        run: ./tools/toggle_videos.ps1 1
 
       - name: Build web
         run: flutter build web --release --base-href /vsl-dictionary/
@@ -114,8 +117,8 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-  build-android:
-    name: Build Android APK
+  build-android-full:
+    name: Build FULL Android APK (bundled)
     needs: [check, analyze]
     if: needs.check.outputs.should_run == 'true'
     runs-on: ubuntu-latest
@@ -129,8 +132,54 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Install dependencies
-        run: flutter pub get
+      - name: Switch to FULL (bundled) build
+        shell: pwsh
+        run: ./tools/toggle_videos.ps1 1
+
+      - name: Decode signing keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/vsl-dictionary.jks
+
+      - name: Create key.properties
+        run: |
+          cat > android/key.properties <<EOF
+          storeFile=vsl-dictionary.jks
+          storePassword=${{ secrets.ANDROID_STORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Rename APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk vsl-dictionary-android-full.apk
+
+      - name: Upload FULL APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-full
+          path: vsl-dictionary-android-full.apk
+          if-no-files-found: error
+
+  build-android:
+    name: Build Android APK (CDN)
+    needs: [check, analyze]
+    if: needs.check.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # Committed state is already CDN mode; the toggle reconciles anyway.
+      - name: Switch to SMALL (CDN) build
+        shell: pwsh
+        run: ./tools/toggle_videos.ps1 0
 
       - name: Decode signing keystore
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/vsl-dictionary.jks
@@ -157,8 +206,8 @@ jobs:
           path: vsl-dictionary-android.apk
           if-no-files-found: error
 
-  build-ios:
-    name: Build unsigned iOS IPA
+  build-ios-full:
+    name: Build FULL unsigned iOS IPA (bundled)
     needs: [check, analyze]
     if: needs.check.outputs.should_run == 'true'
     runs-on: macos-latest
@@ -172,8 +221,47 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Install dependencies
-        run: flutter pub get
+      - name: Switch to FULL (bundled) build
+        shell: pwsh
+        run: ./tools/toggle_videos.ps1 1
+
+      - name: Build unsigned iOS app
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          mkdir -p build/ios/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/Payload/Runner.app
+          cd build/ios
+          zip -qr ../../vsl-dictionary-ios-full-unsigned.ipa Payload
+
+      - name: Upload FULL IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-full
+          path: vsl-dictionary-ios-full-unsigned.ipa
+          if-no-files-found: error
+
+  build-ios:
+    name: Build unsigned iOS IPA (CDN)
+    needs: [check, analyze]
+    if: needs.check.outputs.should_run == 'true'
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # Committed state is already CDN mode; the toggle reconciles anyway.
+      - name: Switch to SMALL (CDN) build
+        shell: pwsh
+        run: ./tools/toggle_videos.ps1 0
 
       - name: Build unsigned iOS app
         run: flutter build ios --release --no-codesign
@@ -186,7 +274,7 @@ jobs:
           cd build/ios
           zip -qr ../../vsl-dictionary-ios-unsigned.ipa Payload
 
-      - name: Upload unsigned IPA artifact
+      - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios
@@ -198,7 +286,9 @@ jobs:
     needs:
       - check
       - build-web
+      - build-android-full
       - build-android
+      - build-ios-full
       - build-ios
     if: needs.check.outputs.should_run == 'true'
     runs-on: ubuntu-latest
@@ -211,10 +301,22 @@ jobs:
           name: web
           path: release
 
+      - name: Download FULL Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: android-full
+          path: release
+
       - name: Download Android artifact
         uses: actions/download-artifact@v4
         with:
           name: android
+          path: release
+
+      - name: Download FULL iOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-full
           path: release
 
       - name: Download iOS artifact
@@ -231,5 +333,7 @@ jobs:
           generate_release_notes: true
           files: |
             release/vsl-dictionary-web.zip
+            release/vsl-dictionary-android-full.apk
             release/vsl-dictionary-android.apk
+            release/vsl-dictionary-ios-full-unsigned.ipa
             release/vsl-dictionary-ios-unsigned.ipa
