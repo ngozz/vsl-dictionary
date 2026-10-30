@@ -106,8 +106,10 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
       // The screen may have been popped mid-initialization.
       if (_disposed) return;
       await controller.setLooping(true);
-      await controller.setPlaybackSpeed(speed);
+      // Speed must be applied AFTER play(): on iOS a setPlaybackSpeed before
+      // play() is silently dropped.
       await controller.play();
+      if (speed != 1.0) await controller.setPlaybackSpeed(speed);
       old?.dispose();
       if (mounted) setState(() {});
     }).catchError((Object e) {
