@@ -551,7 +551,10 @@ class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
         _pending.where((r) => r.$2 == _taskGroup).length;
     final total = outstanding + createdBatch + pendingBatch;
     if (taskGroup == _taskGroup) {
-      _batchTotal = total; // the in-app banner uses this on every platform
+      // The in-app banner uses (total − busy − pending). Keep the total
+      // monotonic while a batch runs: a second call (e.g. a word triggered
+      // while the batch downloads) must not shrink the denominator.
+      _batchTotal = total > _batchTotal ? total : _batchTotal;
       _canceling = false; // a fresh batch wins over a lingering cancel state
     }
     // iOS: a dynamic group text re-issues a notification per change — stay
