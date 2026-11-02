@@ -307,10 +307,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       ),
-                      const Padding(
-                        padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-                        child: DownloadBanner(),
-                      ),
+                      const DownloadBanner(),
                       _CategoryTabs(selected: _tab, onSelected: _setTab),
                       Expanded(child: _buildList()),
                     ],
