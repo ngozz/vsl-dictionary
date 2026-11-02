@@ -229,7 +229,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: theme.colorScheme.surfaceContainerLowest,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         centerTitle: false,

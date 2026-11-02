@@ -215,7 +215,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     // centers and gets a width cap so the video never becomes a giant strip.
     final maxW = MediaQuery.of(context).size.width > 750 ? 980.0 : 720.0;
     return Scaffold(
-      backgroundColor: theme.colorScheme.surfaceContainerLowest,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -224,7 +224,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
               slivers: [
                 SliverAppBar(
                   pinned: true,
-                  backgroundColor: theme.colorScheme.surfaceContainerLowest,
+                  backgroundColor: theme.scaffoldBackgroundColor,
                   surfaceTintColor: Colors.transparent,
                   title: Text(
                     _word.word,
