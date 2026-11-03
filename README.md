@@ -6,6 +6,14 @@ dictionary. Video-first, search-first, no fluff.
 **Source data:** dictionary content transcribed from the National Sign
 Language Dictionary at [qipedc.moet.gov.vn/dictionary](https://qipedc.moet.gov.vn/dictionary).
 
+## Screenshots
+
+<p align="center">
+  <a href="ss/1.jpg"><img src="ss/1.jpg" width="23%" alt="Onboarding — Chào mừng đến với VSL Dictionary"></a>&nbsp;<a href="ss/2.jpg"><img src="ss/2.jpg" width="23%" alt="Search and browse — Tất cả / Từ vựng / Số đếm / Bảng chữ cái"></a>&nbsp;<a href="ss/3.jpg"><img src="ss/3.jpg" width="23%" alt="Settings — default region, theme and offline downloads"></a>&nbsp;<a href="ss/4.jpg"><img src="ss/4.jpg" width="23%" alt="Word detail — sign video, 0.5× slow-mo and illustrations"></a>
+</p>
+
+*Click a screenshot to open it full size.*
+
 ## What it does
 
 - **Search-first** home: instant accent-insensitive search with prefix-match
@@ -34,6 +42,7 @@ vsl-dictionary/
 │   ├── models/word.dart  # data model
 │   ├── services/         # dictionary search, media resolution, settings
 │   └── screens/          # home (search/browse) + word detail
+├── ss/                   # screenshots used in this README
 ├── .github/workflows/    # build + release CI (see below)
 └── icon.png              # launcher icon source
 ```
