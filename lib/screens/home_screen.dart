@@ -8,7 +8,7 @@ import '../main.dart';
 import '../models/word.dart';
 import '../config.dart' show CdnConfig;
 import '../services/dictionary_service.dart';
-import '../services/media_service.dart' show ThemeChoice;
+import '../services/settings_service.dart' show ThemeChoice;
 import '../widgets/download_banner.dart';
 import '../widgets/download_dialogs.dart';
 import '../widgets/fast_scroller.dart';
@@ -118,7 +118,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _downloadAll() async {
     final dl = App.downloads;
-    if (!dl.active) return;    final remaining = dl.remainingEntries();
+    if (!dl.active) return;
+    final remaining = dl.remainingEntries();
     final bytes = remaining.fold(0, (a, e) => a + e.size);
     if (remaining.isEmpty) {
       _snack('Toàn bộ nội dung đã được tải về máy.');

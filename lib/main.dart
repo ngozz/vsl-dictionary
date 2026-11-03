@@ -5,6 +5,7 @@ import 'screens/home_screen.dart';
 import 'services/dictionary_service.dart';
 import 'services/download_service.dart';
 import 'services/media_service.dart';
+import 'services/settings_service.dart';
 import 'services/update_service.dart';
 
 void main() {

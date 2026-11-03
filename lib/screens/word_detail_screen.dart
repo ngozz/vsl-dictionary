@@ -26,6 +26,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
   Future<void>? _initializeFuture;
   int _imageIndex = 0;
   bool _disposed = false;
+  bool _failed = false; // no playable source → show the empty state
 
   /// New key per created surface; bumped after exiting fullscreen because on
   /// web the recycled platform view can end up with an empty texture.
@@ -48,28 +49,52 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
   }
 
   Future<void> _init() async {
-    // Media manifest (file names only) is loaded lazily, on first word opened.
-    await App.media.load();
-    if (_disposed) return;
-    final v = App.media.bestVariant(
-        _word.id, App.settings.defaultRegion.variant);
-    if (v != null) {
+    try {
+      // Media manifest (file names only) is loaded lazily, on first word opened.
+      await App.media.load();
+      if (_disposed) return;
+      final v = App.media.bestVariant(
+          _word.id, App.settings.defaultRegion.variant);
+      if (v == null) {
+        _markFailed(); // no playable variant: empty state, not a spinner
+        return;
+      }
       _selectVariant(v);
+    } catch (_) {
+      if (!_disposed) _markFailed();
     }
+  }
+
+  /// No playable source: release the current controller and show the empty
+  /// state instead of an eternal spinner.
+  void _markFailed() {
+    final old = _controller;
+    _controller = null;
+    _initializeFuture = null;
+    _failed = true;
+    if (mounted) setState(() {});
+    if (old != null) unawaited(old.dispose());
   }
 
   void _selectVariant(VideoVariant v, {bool forceAsset = false}) {
     if (_disposed) return;
     final asset = App.media.videoAsset(_word.id, v);
     final src = App.media.videoSource(_word.id, v);
-    if (src == MediaSource.asset && asset == null) return;
-    if (src == MediaSource.network && forceAsset && asset == null) return;
+    if (src == MediaSource.asset && asset == null) {
+      _markFailed();
+      return;
+    }
+    if (src == MediaSource.network && forceAsset && asset == null) {
+      _markFailed();
+      return;
+    }
     // Carry the playback speed across variant switches so the 0.5× pill
     // stays in sync (it reads speed from the controller).
     final speed = _controller?.value.playbackSpeed ?? 1.0;
     setState(() {
       _currentVariant = v;
       _surfaceKey = UniqueKey();
+      _failed = false;
     });
     final old = _controller;
     // mixWithOthers: videos are silent; never steal audio focus from other
@@ -131,17 +156,15 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
       if (mounted) setState(() {});
     }).catchError((Object e) {
       old?.dispose();
-      if (_disposed) return;
+      if (_disposed) return; // State.dispose already disposed _controller
       // Web (bundled) fallback: the CDN failed → retry from bundled assets.
       if (!forceAsset && src == MediaSource.network && asset != null) {
         _selectVariant(v, forceAsset: true);
         return;
       }
       // Drop the failed controller so the surface shows the empty state
-      // instead of an eternal spinner.
-      _controller = null;
-      _initializeFuture = null;
-      if (mounted) setState(() {});
+      // instead of an eternal spinner, and release its platform resources.
+      _markFailed();
     });
   }
 
@@ -154,11 +177,9 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     if (!ok ||
         !mounted ||
         App.media.videoSource(_word.id, v) != MediaSource.localFile) {
-      // Show the empty state instead of an eternal spinner.
-      setState(() {
-        _controller = null;
-        _initializeFuture = null;
-      });
+      // Show the empty state instead of an eternal spinner; the previous
+      // variant's controller is kept alive by this path, so release it.
+      _markFailed();
       return;
     }
     _selectVariant(v); // now resolves to the downloaded local file
@@ -168,11 +189,13 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     final c = _controller;
     if (c == null) return;
     await c.setPlaybackSpeed(c.value.playbackSpeed < 1.0 ? 1.0 : 0.5);
+    if (!mounted || _controller != c) return;
     if (!c.value.isPlaying) await c.play();
   }
 
   void _enterFullscreen() {
-    if (_controller == null || !_controller!.value.isInitialized) return;
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
     SystemChrome.setPreferredOrientations(const [
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
@@ -183,17 +206,17 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
         opaque: false,
         transitionDuration: const Duration(milliseconds: 200),
         pageBuilder: (_, _, _) =>
-            _FullscreenVideo(controller: _controller!, onSlow: _toggleSlow),
+            _FullscreenVideo(controller: c, onSlow: _toggleSlow),
         transitionsBuilder: (_, anim, _, child) =>
             FadeTransition(opacity: anim, child: child),
       ),
     ).then((_) {
       _restoreUi();
       // Force a fresh video surface; fixes the empty-frame bug on web.
-      if (mounted) {
-        setState(() => _surfaceKey = UniqueKey());
-        _controller?.play();
-      }
+      if (!mounted) return;
+      final resume = c.value.isPlaying; // respect a pause made in fullscreen
+      setState(() => _surfaceKey = UniqueKey());
+      if (resume) c.play();
     });
   }
 
@@ -277,6 +300,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
         key: _surfaceKey,
         controller: _controller,
         initializeFuture: _initializeFuture,
+        failed: _failed,
         onSlow: _toggleSlow,
         onFullscreen: _enterFullscreen,
       );
@@ -376,6 +400,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
 class VideoSurface extends StatelessWidget {
   final VideoPlayerController? controller;
   final Future<void>? initializeFuture;
+  final bool failed;
   final VoidCallback onSlow;
   final VoidCallback onFullscreen;
 
@@ -383,6 +408,7 @@ class VideoSurface extends StatelessWidget {
     super.key,
     required this.controller,
     required this.initializeFuture,
+    required this.failed,
     required this.onSlow,
     required this.onFullscreen,
   });
@@ -392,6 +418,12 @@ class VideoSurface extends StatelessWidget {
     return FutureBuilder<void>(
       future: initializeFuture,
       builder: (context, snap) {
+        if (failed) {
+          return Center(
+            child: Icon(Icons.videocam_off_outlined,
+                size: 48, color: Theme.of(context).colorScheme.outline),
+          );
+        }
         final ready = snap.connectionState == ConnectionState.done &&
             controller?.value.isInitialized == true;
         if (!ready) return const Center(child: CircularProgressIndicator());
@@ -493,6 +525,7 @@ class _VideoControlsState extends State<VideoControls> {
     } else {
       await c.play();
     }
+    if (!mounted) return;
     _poke();
   }
 

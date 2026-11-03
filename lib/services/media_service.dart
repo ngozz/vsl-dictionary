@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config.dart' show CdnConfig;
 import '../models/word.dart';
@@ -8,8 +7,9 @@ import 'download_service.dart';
 
 /// Resolves media assets for a word.
 ///
-/// For the "personal build" phase, everything is bundled under `assets/dic/`.
-/// The API is deliberately network-shaped so a CDN mode can be swapped in later.
+/// Media lives under `data/videos/` and `data/images/`; an `AssetManifest`
+/// snapshot is used for constant-time existence checks. The API is network-
+/// shaped so CDN mode can resolve the same names without extra branching.
 class MediaService {
   static const _videoPrefix = 'data/videos/';
   static MediaService? _instance;
@@ -63,7 +63,7 @@ class MediaService {
     return [preferred, ...rest];
   }
 
-  /// Illustration assets for a word (up to imageCount in assets/images/).
+  /// Illustration assets for a word (up to imageCount in data/images/).
   List<String> imageAssets(Word word) {
     final out = <String>[];
     for (var i = 0; i < word.imageCount; i++) {
@@ -73,80 +73,6 @@ class MediaService {
       if (_assets.contains(path)) out.add(path);
     }
     return out;
-  }
-}
-
-/// Favorites + default region + theme stored in shared_preferences.
-enum ThemeChoice { dark, black, light }
-
-class SettingsService extends ChangeNotifier {
-  static const _regionKey = 'vsl.default_region';
-  static const _favoritesKey = 'vsl.favorites';
-  static const _themeKey = 'vsl.theme';
-  static const _checkUpdatesKey = 'vsl.check_updates';
-  static const _introKey = 'vsl.intro_seen';
-
-  Region _defaultRegion = Region.north;
-  Set<String> _favorites = {};
-  ThemeChoice _theme = ThemeChoice.dark;
-  bool _checkUpdates = true; // auto-check for content updates at startup
-  bool _introSeen = false; // first-launch onboarding shown
-
-  Region get defaultRegion => _defaultRegion;
-  Set<String> get favorites => _favorites;
-  ThemeChoice get theme => _theme;
-  bool get checkUpdates => _checkUpdates;
-  bool get introSeen => _introSeen;
-
-  Future<void> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    _defaultRegion =
-        Region.values.asNameMap()[prefs.getString(_regionKey)] ?? Region.north;
-    _favorites = (prefs.getStringList(_favoritesKey) ?? const []).toSet();
-    _theme = ThemeChoice.values.asNameMap()[prefs.getString(_themeKey)] ??
-        ThemeChoice.dark;
-    _checkUpdates = prefs.getBool(_checkUpdatesKey) ?? true;
-    _introSeen = prefs.getBool(_introKey) ?? false;
-  }
-
-  /// Marks the onboarding as seen (first-run intro and manual re-views).
-  Future<void> setIntroSeen() async {
-    if (_introSeen) return;
-    _introSeen = true;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_introKey, true);
-  }
-
-  Future<void> setCheckUpdates(bool on) async {
-    if (on == _checkUpdates) return;
-    _checkUpdates = on;
-    notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_checkUpdatesKey, on);
-  }
-
-  Future<void> setTheme(ThemeChoice choice) async {
-    if (choice == _theme) return;
-    _theme = choice;
-    notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_themeKey, choice.name);
-  }
-
-  Future<void> setDefaultRegion(Region region) async {
-    _defaultRegion = region;
-    notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_regionKey, region.name);
-  }
-
-  bool isFavorite(Word w) => _favorites.contains(w.id);
-
-  Future<void> toggleFavorite(Word w) async {
-    if (!_favorites.remove(w.id)) _favorites.add(w.id);
-    notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(_favoritesKey, _favorites.toList());
   }
 }
 

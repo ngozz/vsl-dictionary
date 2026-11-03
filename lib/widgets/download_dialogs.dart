@@ -97,6 +97,9 @@ abstract final class DownloadDialogs {
   /// The dismissible startup prompt: changed-file counts, [Cập nhật] applies.
   static Future<void> showUpdatePrompt(
       BuildContext context, int changedCount, int bytes) async {
+    // Resolve the messenger before the dialog closes: looking it up from the
+    // dialog's own (then deactivated) context is unsafe.
+    final messenger = ScaffoldMessenger.of(context);
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
@@ -120,7 +123,7 @@ abstract final class DownloadDialogs {
                   .enqueueAll(App.updates.changedEntriesFor(App.downloads));
               App.updates.dismissedThisSession = true;
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
+              messenger.showSnackBar(
                   SnackBar(content: Text('Đang tải lại $n video cập nhật…')));
             },
             child: const Text('Cập nhật'),

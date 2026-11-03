@@ -15,19 +15,25 @@ import 'download_service.dart';
 /// is reserved for verifying fresh downloads (see DownloadService).
 class UpdateService extends ChangeNotifier {
   Manifest? _remote;
-  DateTime? lastCheck;
   String? lastError;
   bool checking = false;
   bool dismissedThisSession = false;
+  Future<bool>? _inFlight;
 
   Manifest? get remote => _remote;
 
   /// Fetches the CDN manifest. Returns true if the manifest content changed
   /// relative to the last successful check. Silent failure (offline etc.):
   /// check `lastError`.
-  Future<bool> check() async {
-    if (!CdnConfig.useCdn) return false;
-    if (checking) return false;
+  ///
+  /// Concurrent callers share one request instead of silently getting false.
+  Future<bool> check() {
+    if (!CdnConfig.useCdn) return Future.value(false);
+    return _inFlight ??=
+        _runCheck().whenComplete(() => _inFlight = null);
+  }
+
+  Future<bool> _runCheck() async {
     checking = true;
     lastError = null;
     notifyListeners();
@@ -36,7 +42,6 @@ class UpdateService extends ChangeNotifier {
       final manifest = Manifest.fromJson(jsonDecode(body) as Map<String, dynamic>);
       final changed = _remote == null || _remote!.version != manifest.version;
       _remote = manifest;
-      lastCheck = DateTime.now();
       return changed;
     } catch (e) {
       lastError = e.toString();
@@ -76,16 +81,6 @@ class UpdateService extends ChangeNotifier {
         if (remote.byName[name] != null &&
             remote.byName[name]!.size != dl.downloadedEntry(name)!.size)
           remote.byName[name]!,
-    ];
-  }
-
-  /// Downloaded names that have vanished from the CDN (cleanup candidates).
-  List<String> removedNamesFor(DownloadService dl) {
-    final remote = _remote;
-    if (remote == null) return const [];
-    return [
-      for (final name in dl.downloadedNames)
-        if (!remote.byName.containsKey(name)) name,
     ];
   }
 }

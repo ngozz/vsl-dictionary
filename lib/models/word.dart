@@ -2,7 +2,7 @@ class Word {
   final String id;
   final String word; // Vietnamese, may contain diacritics
   final String description;
-  final int imageCount; // number of illustrations in assets/anh/<id>.png
+  final int imageCount; // number of illustrations in data/images/<id>[_i].webp
   final String type; // "0" = normal word, "1" = numbers/math, "2" = other
 
   const Word({

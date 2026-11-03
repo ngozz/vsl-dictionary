@@ -36,8 +36,6 @@ class VideoEntry {
         size: (j['size'] as num).toInt(),
         sha256: (j['sha256'] as String?) ?? '',
       );
-
-  Map<String, dynamic> toJson() => {'n': name, 'size': size, 'sha256': sha256};
 }
 
 /// Downloads sign videos from the CDN and keeps verified local copies.
@@ -87,9 +85,7 @@ class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
   /// video name → verified local entry (only validated copies live here).
   final Map<String, VideoEntry> _downloaded = {};
 
-  final Map<String, double> _progress = {}; // name → 0..1
   final Map<String, TaskStatus> _status = {}; // name → TaskStatus
-  final List<String> _failedNames = [];
   final Map<String, Completer<bool>> _waiters = {};
   final Map<String, String> _taskGroups = {}; // name → notification group
   final ListQueue<(VideoEntry, String)> _pending = ListQueue(); // app-side queue
@@ -115,21 +111,16 @@ class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
   int get downloadedBytes => _downloaded.values.fold(0, (a, e) => a + e.size);
   Set<String> get downloadedNames => _downloaded.keys.toSet();
   int get catalogCount => _catalogByName.length;
-  List<String> get failedNames => _failedNames.toList();
 
   /// True once the user confirmed a download on mobile data this session;
   /// the warning is skipped for the rest of the session and resets on app
   /// start (plain field).
   bool mobileDataConfirmedThisSession = false;
 
-  bool isDownloaded(String name) => _downloaded.containsKey(name);
-
   bool isBusy(String name) {
     final s = _status[name];
     return s != null && _isBusy(s);
   }
-
-  double progressOf(String name) => _progress[name] ?? 0;
 
   VideoEntry? downloadedEntry(String name) => _downloaded[name];
 
@@ -223,7 +214,8 @@ class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
   // ── Init ─────────────────────────────────────────────────────────────────
 
   Future<void> initialize() async {
-    _ready = true; // guards double init
+    if (_ready) return; // idempotent: a second call must not double-listen
+    _ready = true;
     WidgetsBinding.instance.addObserver(this);
     try {
       _active = !kIsWeb &&
@@ -347,7 +339,6 @@ class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
     _downloaded.remove(e.name);
     _canceled.remove(e.name);
     _status[e.name] = TaskStatus.enqueued;
-    _progress[e.name] = 0;
     final task = _buildTask(e, group);
     _expect[task.taskId] = e;
     _taskGroups[e.name] = group;
@@ -389,9 +380,13 @@ class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
       final (e, group) = _pending.removeFirst();
       _pendingNames.remove(e.name);
       _canceled.remove(e.name);
+      // Register the expected entry so background-flushed downloads get the
+      // same size/sha256 verification as foreground ones.
+      final task = _buildTask(e, group);
+      _expect[task.taskId] = e;
       _status[e.name] = TaskStatus.enqueued;
       _taskGroups[e.name] = group;
-      tasks.add(_buildTask(e, group));
+      tasks.add(task);
     }
     _enqueueChain = _enqueueChain
         .then<void>((_) => _dl.enqueueAll(tasks))
@@ -420,29 +415,29 @@ class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
     // A cancelled task keeps emitting acks (and its notification worker keeps
     // running) for a while; none of that may move the in-app banner again.
     if (_canceled.contains(name)) return;
-    if (update is TaskProgressUpdate) {
-      if (_status.containsKey(name)) _progress[name] = update.progress;
-    } else if (update is TaskStatusUpdate) {
-      _status[name] = update.status;
-      if (update.status == TaskStatus.complete) {
-        unawaited(_finish(name, update.task));
-      } else {
-        if (!_isBusy(update.status)) _progress.remove(name);
-        if (update.status == TaskStatus.canceled) {
-          // Cancel is not a failure: no failed entry, no error notification.
-          _completeWaiter(name, false);
-          _taskGroups.remove(name);
-          _settleBatch();
-        } else if (isFailure(update.status)) {
-          _failedNames.add(name);
-          _completeWaiter(name, false);
-          _taskGroups.remove(name);
-          _settleBatch();
-        }
+    // Progress ticks don't change anything the UI shows (the banner counts
+    // statuses, not percentages), so they don't repaint the screen.
+    if (update is! TaskStatusUpdate) return;
+    _status[name] = update.status;
+    if (update.status == TaskStatus.complete) {
+      unawaited(_finish(name, update.task));
+    } else {
+      if (!_isBusy(update.status)) {
+        _expect.remove('$name.mp4'); // terminal: no verification is coming
       }
-      // Top the native queue back up as slots free up.
-      _refillQueue();
+      if (update.status == TaskStatus.canceled) {
+        // Cancel is not a failure: no error notification.
+        _completeWaiter(name, false);
+        _taskGroups.remove(name);
+        _settleBatch();
+      } else if (isFailure(update.status)) {
+        _completeWaiter(name, false);
+        _taskGroups.remove(name);
+        _settleBatch();
+      }
     }
+    // Top the native queue back up as slots free up.
+    _refillQueue();
     notifyListeners();
   }
 
@@ -482,7 +477,6 @@ class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
       await _promote(name, actual, sha);
       await File(_metaPath(name)).writeAsString(
           jsonEncode({'name': name, 'size': actual, 'sha256': sha}));
-      _progress.remove(name);
     } catch (e) {
       ok = false;
       debugPrint('[DOWNLOAD] verify failed: $e');
@@ -490,7 +484,6 @@ class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
         final f = fileFor(name);
         if (f.existsSync()) await f.delete();
       } catch (_) {}
-      _failedNames.add(name);
     }
     _completeWaiter(name, ok);
     _taskGroups.remove(name);
@@ -586,10 +579,7 @@ class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
     return created;
   }
 
-  /// "Download all": everything in the catalog not already downloaded or in
-  /// flight. Re-running costs nothing — it only enqueues the delta.
-  int enqueueAllContent() => enqueueAll(remainingEntries());
-
+  /// Catalog entries not already downloaded, in flight or queued.
   List<VideoEntry> remainingEntries() {
     if (!_active) return const [];
     return [
@@ -597,34 +587,6 @@ class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
         if (!_isBusyOrDone(e.name) && !_pendingNames.contains(e.name)) e,
     ];
   }
-
-  /// Removes local copies explicitly (user-requested cleanup).
-  int removeLocal(List<String> names) {
-    var removed = 0;
-    for (final name in names) {
-      if (!_downloaded.containsKey(name)) continue;
-      try {
-        final f = fileFor(name);
-        if (f.existsSync()) f.deleteSync();
-        final m = File(_metaPath(name));
-        if (m.existsSync()) m.deleteSync();
-      } catch (e) {
-        debugPrint('[DOWNLOAD] remove $name: $e');
-        continue;
-      }
-      _downloaded.remove(name);
-      removed++;
-    }
-    if (removed > 0) notifyListeners();
-    return removed;
-  }
-
-  /// Cancels in-flight tasks for [names]; downloaded copies are kept.
-  ///
-  /// Pending (app-side queued) entries are dropped too, and the UI settles
-  /// before any native call, so cancelling never looks like "it kept going".
-  Future<void> cancelTasks(Iterable<String> names) =>
-      _cancelNames(names, visual: true);
 
   /// Cancels the current batch: in-flight tasks are canceled, app-side
   /// pending entries are dropped; downloaded copies are kept.
@@ -666,7 +628,7 @@ class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
       _pendingNames.remove(n);
       _taskGroups.remove(n);
       _status[n] = TaskStatus.canceled;
-      _progress.remove(n);
+      _expect.remove('$n.mp4'); // no verification for a task we cancelled
       _completeWaiter(n, false);
     }
     _pending.removeWhere((r) => targets.contains(r.$1.name));
@@ -732,9 +694,12 @@ class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
   /// Deletes every downloaded copy, canceling in-flight tasks first.
   /// Reports progress via [deleteDone]/[deleteTotal] for the in-app banner.
   Future<int> deleteAll() async {
+    if (_deleteTotal > 0) return 0; // already deleting (double tap)
     _pending.clear();
     _pendingNames.clear();
-    await _cancelNames(_catalogByName.keys, batch: true, visual: false);
+    // Only active work needs cancelling — walking the whole catalog would
+    // mark hundreds of untouched videos "cancelled" for nothing.
+    await _cancelNames(_taskGroups.keys, batch: true, visual: false);
     final names = _downloaded.keys.toList();
     if (names.isEmpty) return 0;
     _deleteTotal = names.length;

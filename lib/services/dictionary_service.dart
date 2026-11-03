@@ -33,7 +33,6 @@ class DictionaryService {
   late List<List<String>> _syls; // folded syllables per entry
   late List<int> _alpha; // Vietnamese alphabetical rank per entry
   late List<Word> _byAlpha; // browse() order
-  late Map<String, Word> _byId;
 
   // Tier 6 (mid-syllable substring) only for queries this long, so
   // one-letter queries don't flood the list.
@@ -44,7 +43,13 @@ class DictionaryService {
   Future<void> load() async {
     if (_loaded) return;
     final raw = await rootBundle.loadString('data/vsl_data.json');
-    if (raw.isEmpty) return;
+    if (raw.isEmpty) {
+      // Publish an empty (initialized) index instead of leaving `late`
+      // fields unset forever.
+      _words = const [];
+      _buildIndex();
+      return;
+    }
     _words = await compute(_parseWords, raw);
     _buildIndex();
   }
@@ -70,7 +75,6 @@ class DictionaryService {
       _alpha[order[r]] = r;
     }
     _byAlpha = [for (final i in order) _words[i]];
-    _byId = {for (final w in _words) w.id: w};
     _loaded = true;
   }
 
@@ -180,8 +184,6 @@ class DictionaryService {
     if (typeFilter == null) return List.unmodifiable(_byAlpha);
     return _byAlpha.where((w) => w.type == typeFilter).toList();
   }
-
-  Word? findById(String id) => _byId[id];
 
   static final _ws = RegExp(r'\s+');
 
