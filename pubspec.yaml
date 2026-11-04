@@ -93,6 +93,7 @@ flutter:
   assets:
     - data/vsl_data.json
     - data/json/
+    - data/i18n/en/
     # - data/videos/   # excluded: CDN mode (run tools\toggle_videos.ps1 -Bundled 1 to include)
     - data/images/
 

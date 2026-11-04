@@ -2,6 +2,8 @@ class Word {
   final String id;
   final String word; // Vietnamese, may contain diacritics
   final String description;
+  final String wordEn; // English gloss (empty when missing)
+  final String descriptionEn; // English definition (empty when missing)
   final int imageCount; // number of illustrations in data/images/<id>[_i].webp
   final String type; // "0" = normal word, "1" = numbers/math, "2" = other
 
@@ -9,6 +11,8 @@ class Word {
     required this.id,
     required this.word,
     required this.description,
+    this.wordEn = '',
+    this.descriptionEn = '',
     this.imageCount = 1,
     this.type = '0',
   });
@@ -21,7 +25,21 @@ class Word {
         type: json['type']?.toString() ?? '0',
       );
 
+  /// Adds the English companion content loaded from
+  /// `data/i18n/en/vsl_data_en.json`.
+  Word withEnglish({String wordEn = '', String descriptionEn = ''}) => Word(
+        id: id,
+        word: word,
+        description: description,
+        wordEn: wordEn.trim(),
+        descriptionEn: descriptionEn.trim(),
+        imageCount: imageCount,
+        type: type,
+      );
+
   bool hasDescription() => description.trim().isNotEmpty;
+  bool hasEnglishDescription() => descriptionEn.trim().isNotEmpty;
+  bool hasEnglishWord() => wordEn.trim().isNotEmpty;
 }
 
 enum VideoVariant {

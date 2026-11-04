@@ -248,16 +248,41 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
               slivers: [
                 SliverAppBar(
                   pinned: true,
+                  toolbarHeight: _word.hasEnglishWord() ? 72 : kToolbarHeight,
                   backgroundColor: theme.scaffoldBackgroundColor,
                   surfaceTintColor: Colors.transparent,
-                  title: Text(
-                    _word.word,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                  title: _word.hasEnglishWord()
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _word.word,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              _word.wordEn,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(
+                          _word.word,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                   actions: [
                     FavoriteIcon(
                         word: _word, padding: const EdgeInsets.only(right: 12)),
@@ -271,7 +296,8 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                       const SizedBox(height: 12),
                       _buildVideoBlock(variants),
                       const SizedBox(height: 16),
-                      if (_word.hasDescription()) ...[
+                      if (_word.hasDescription() ||
+                          _word.hasEnglishDescription()) ...[
                         _buildDescription(),
                         const SizedBox(height: 12),
                       ],
@@ -343,25 +369,41 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     );
   }
 
-  Widget _buildDescription() => Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(context.l10n.meaning,
-                style: Theme.of(context).textTheme.labelLarge
-                    ?.copyWith(color: Theme.of(context).colorScheme.primary)),
-            const SizedBox(height: 6),
-            Text(_word.description, style: Theme.of(context).textTheme.bodyMedium),
-          ],
-        ),
-      );
+  Widget _buildDescription() {
+    final theme = Theme.of(context);
+    final vi = _word.description.trim();
+    final en = _word.descriptionEn.trim();
+    final hasEn = en.isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.surfaceContainerHighest),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(context.l10n.meaning,
+              style: theme.textTheme.labelLarge
+                  ?.copyWith(color: theme.colorScheme.primary)),
+          const SizedBox(height: 6),
+          if (hasEn)
+            Text(en, style: theme.textTheme.bodyMedium),
+          if (hasEn && vi.isNotEmpty) const SizedBox(height: 6),
+          if (vi.isNotEmpty)
+            Text(
+              vi,
+              style: hasEn
+                  ? theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    )
+                  : theme.textTheme.bodyMedium,
+            ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildImages(List<String> images) {
     return ClipRRect(

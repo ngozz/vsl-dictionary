@@ -38,3 +38,10 @@ windows/flutter/ephemeral/
 .kotlin/
 *.iml
 .idea/
+
+# English translation pipeline (regenerable, local debug only).
+# Shipped results live in data/i18n/en/ and are committed.
+data/i18n/work/
+data/i18n/validation-*.txt
+data/i18n/inspect-*.txt
+data/i18n/dump-*.txt

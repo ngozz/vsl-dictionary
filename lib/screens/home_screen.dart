@@ -186,11 +186,16 @@ class _HomeScreenState extends State<HomeScreen> {
     final q = value.trim();
     setState(() {
       _searchMode = q.isNotEmpty;
-      // Untrimmed: a trailing space marks the last syllable complete
-      // ("do " matches "do Thái", not "doanh trại").
-      _results = q.isEmpty
-          ? const []
-          : App.dictionary.search(value, typeFilter: _typeFilter);
+      if (_searchMode) {
+        // Untrimmed: a trailing space marks the last syllable complete
+        // ("do " matches "do Thái", not "doanh trại").
+        _results = App.dictionary.search(value, typeFilter: _typeFilter);
+      } else {
+        _results = const [];
+        // Leaving search: refresh the browse list for the tab that is selected
+        // *now* — the tab may have been changed while a query was active.
+        _browseList = App.dictionary.browse(typeFilter: _typeFilter);
+      }
       _favoritesOnly = false;
     });
   }
@@ -198,13 +203,14 @@ class _HomeScreenState extends State<HomeScreen> {
   void _setTab(HomeTab t) {
     setState(() {
       _tab = t;
+      // Keep the browse list in sync even while a search is running: if the
+      // user clears the query afterwards, the list must belong to this tab.
+      _browseList = App.dictionary.browse(typeFilter: _typeFilter);
       if (_searchMode) {
         _results = App.dictionary.search(
           _searchController.text,
           typeFilter: _typeFilter,
         );
-      } else {
-        _browseList = App.dictionary.browse(typeFilter: _typeFilter);
       }
     });
   }
@@ -289,10 +295,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     icon: const Icon(Icons.close),
                                     onPressed: () {
                                       _searchController.clear();
-                                      setState(() {
-                                        _searchMode = false;
-                                        _results = const [];
-                                      });
+                                      _onSearchChanged('');
                                     },
                                   )
                                 : null,
@@ -807,9 +810,10 @@ class _SectionHeader extends StatelessWidget {
 
 // ---------------------------------------------------------------------------
 
-/// A lean list tile on purpose: no Card, no subtitle. With 3,325 rows in the
-/// "Tất cả" tab, heavy tiles make scrolling unusable. Descriptions are
-/// intentionally not shown in lists (available in the detail screen).
+/// A lean list tile: no Card. With 3,325 rows in the "Tất cả" tab, heavy
+/// tiles make scrolling unusable. Definitions are not shown in lists
+/// (available in the detail screen); only the English gloss rides under the
+/// Vietnamese headword.
 class _WordTile extends StatelessWidget {
   final SearchResult result;
   final VoidCallback onTap;
@@ -843,41 +847,58 @@ class _WordTile extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      child: hasHighlight
-                          ? RichText(
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              text: TextSpan(
-                                style: theme.textTheme.bodyLarge?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.onSurface,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          hasHighlight
+                              ? RichText(
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  text: TextSpan(
+                                    style: theme.textTheme.bodyLarge?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: theme.colorScheme.onSurface,
+                                    ),
+                                    children: [
+                                      TextSpan(
+                                          text: w.word.substring(0, match)),
+                                      TextSpan(
+                                        text: w.word.substring(
+                                          match,
+                                          match + matchLen,
+                                        ),
+                                        style: TextStyle(
+                                          color: theme.colorScheme.error,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      TextSpan(
+                                        text:
+                                            w.word.substring(match + matchLen),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : Text(
+                                  w.word,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                                children: [
-                                  TextSpan(text: w.word.substring(0, match)),
-                                  TextSpan(
-                                    text: w.word.substring(
-                                      match,
-                                      match + matchLen,
-                                    ),
-                                    style: TextStyle(
-                                      color: theme.colorScheme.error,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text: w.word.substring(match + matchLen),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : Text(
-                              w.word,
+                          if (w.hasEnglishWord())
+                            Text(
+                              w.wordEn,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                fontWeight: FontWeight.w600,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
+                        ],
+                      ),
                     ),
                     const SizedBox(width: 6),
                     FavoriteIcon(

@@ -51,7 +51,43 @@ class DictionaryService {
       return;
     }
     _words = await compute(_parseWords, raw);
+    await _loadEnglish();
     _buildIndex();
+  }
+
+  /// Attaches the English sidecar when it is bundled; any failure keeps the
+  /// Vietnamese-only list (the app must never break because a translation is
+  /// missing).
+  Future<void> _loadEnglish() async {
+    try {
+      final raw = await rootBundle.loadString('data/i18n/en/vsl_data_en.json');
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      final entries = decoded['entries'];
+      if (entries is! Map) return;
+      final seen = <String, int>{};
+      _words = [
+        for (final word in _words)
+          _withEnglish(word, entries, seen),
+      ];
+    } catch (_) {
+      // Sidecar absent or malformed: keep Vietnamese.
+    }
+  }
+
+  static Word _withEnglish(
+    Word word,
+    Map entries,
+    Map<String, int> seen,
+  ) {
+    final occurrence = (seen[word.id] ?? 0) + 1;
+    seen[word.id] = occurrence;
+    final key = occurrence == 1 ? word.id : '${word.id}#$occurrence';
+    final value = entries[key];
+    if (value is! Map) return word;
+    return word.withEnglish(
+      wordEn: (value['word'] as String?) ?? '',
+      descriptionEn: (value['description'] as String?) ?? '',
+    );
   }
 
   /// Test hooks: build state without the asset bundle.
