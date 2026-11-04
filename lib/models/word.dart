@@ -33,13 +33,6 @@ enum VideoVariant {
   final String suffix;
   const VideoVariant(this.suffix);
 
-  String label() => switch (this) {
-        VideoVariant.main => 'Chính',
-        VideoVariant.north => 'Miền Bắc',
-        VideoVariant.central => 'Miền Trung',
-        VideoVariant.south => 'Miền Nam',
-      };
-
   /// Best-effort video asset name: Priority placement for existence checks.
   String videoAssetBasename(String id) => '$id$suffix';
 }

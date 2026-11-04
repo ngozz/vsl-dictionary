@@ -1,0 +1,263 @@
+{
+  "@@locale": "vi",
+
+  "appTitle": "Từ điển Ký hiệu",
+  "@appTitle": {
+    "description": "App bar title on the home screen."
+  },
+  "appWindowTitle": "Từ điển Ký hiệu Việt Nam",
+  "@appWindowTitle": {
+    "description": "Window / browser tab title."
+  },
+
+  "favoritesShow": "Xem yêu thích",
+  "@favoritesShow": {
+    "description": "App bar button tooltip: switch the list to favorites only."
+  },
+  "favoritesHide": "Xem tất cả",
+  "@favoritesHide": {
+    "description": "App bar button tooltip: leave the favorites-only list."
+  },
+  "settingsTooltip": "Cài đặt",
+  "searchHint": "Tìm từ…",
+  "@searchHint": {
+    "description": "Search field placeholder."
+  },
+  "searchNoResults": "Không tìm thấy “{query}”",
+  "@searchNoResults": {
+    "description": "Shown when a search returns nothing.",
+    "placeholders": {
+      "query": { "type": "String" }
+    }
+  },
+  "favoritesEmpty": "Chưa có từ nào được yêu thích",
+  "@favoritesEmpty": {
+    "description": "Empty state of the favorites list."
+  },
+  "loadError": "Lỗi tải dữ liệu:\n{error}",
+  "@loadError": {
+    "description": "Fatal error while loading the bundled dictionary.",
+    "placeholders": {
+      "error": { "type": "String" }
+    }
+  },
+  "cdnUnavailable": "CDN không khả dụng — tải/phát trực tuyến bị tắt.",
+  "@cdnUnavailable": {
+    "description": "Snackbar when the downloader could not start and CDN mode is on."
+  },
+
+  "tabAll": "Tất cả",
+  "tabWords": "Từ vựng",
+  "tabNumbers": "Số đếm",
+  "tabAlphabet": "Bảng chữ cái",
+
+  "settingsTitle": "Cài đặt",
+  "settingsRegion": "Vùng ký hiệu mặc định",
+  "@settingsRegion": {
+    "description": "Settings heading for the default sign region."
+  },
+  "regionNorth": "Bắc",
+  "regionCentral": "Trung",
+  "regionSouth": "Nam",
+
+  "settingsTheme": "Giao diện",
+  "@settingsTheme": {
+    "description": "Settings heading for the colour theme."
+  },
+  "themeDark": "Tối",
+  "themeBlack": "Đen",
+  "themeLight": "Sáng",
+
+  "settingsLanguage": "Ngôn ngữ",
+  "@settingsLanguage": {
+    "description": "Settings heading for the interface language."
+  },
+  "languageVietnamese": "Tiếng Việt",
+  "@languageVietnamese": {
+    "description": "Language name — never translated."
+  },
+  "languageEnglish": "English",
+  "@languageEnglish": {
+    "description": "Language name — never translated."
+  },
+
+  "settingsDownloads": "Tải xuống & cập nhật",
+  "@settingsDownloads": {
+    "description": "Settings heading for downloading / updating content."
+  },
+  "downloadedSummary": "Đã tải: {done}/{total} video ({size})",
+  "@downloadedSummary": {
+    "description": "How many videos are stored locally and their total size.",
+    "placeholders": {
+      "done": { "type": "int", "format": "decimalPattern" },
+      "total": { "type": "int", "format": "decimalPattern" },
+      "size": { "type": "String" }
+    }
+  },
+  "checkUpdates": "Kiểm tra cập nhật khi mở ứng dụng",
+  "checkUpdatesOff": "Tắt = app hoàn toàn ngoại tuyến sau khi đã tải",
+  "downloadAll": "Tải toàn bộ từ điển",
+  "checkNow": "Kiểm tra cập nhật",
+  "deleteDownloaded": "Xoá dữ liệu đã tải",
+  "replayIntro": "Xem lại hướng dẫn",
+  "wordCount": "Số từ: {count}",
+  "@wordCount": {
+    "description": "Footer line with the number of dictionary entries.",
+    "placeholders": {
+      "count": { "type": "int", "format": "decimalPattern" }
+    }
+  },
+  "dataCredit": "Dữ liệu từ dự án “NgonTay”.",
+  "@dataCredit": {
+    "description": "Footer line crediting the source data."
+  },
+
+  "allDownloaded": "Toàn bộ nội dung đã được tải về máy.",
+  "downloadOnWifi": "Sẽ tải khi có Wi-Fi (mở lại màn hình này).",
+  "downloadStarted": "Đã bắt đầu tải {count} video…",
+  "@downloadStarted": {
+    "placeholders": {
+      "count": { "type": "int", "format": "decimalPattern" }
+    }
+  },
+  "deletedVideos": "Đã xoá {count} video.",
+  "@deletedVideos": {
+    "placeholders": {
+      "count": { "type": "int", "format": "decimalPattern" }
+    }
+  },
+  "updateCheckFailed": "Không thể kiểm tra: {error}",
+  "@updateCheckFailed": {
+    "placeholders": {
+      "error": { "type": "String" }
+    }
+  },
+  "upToDate": "Nội dung đã là bản mới nhất.",
+
+  "bannerDeleting": "Đang xoá {done}/{total} video…",
+  "@bannerDeleting": {
+    "placeholders": {
+      "done": { "type": "int", "format": "decimalPattern" },
+      "total": { "type": "int", "format": "decimalPattern" }
+    }
+  },
+  "bannerCanceling": "Đang huỷ tải…",
+  "bannerDownloading": "Đang tải {done}/{total} video…",
+  "@bannerDownloading": {
+    "placeholders": {
+      "done": { "type": "int", "format": "decimalPattern" },
+      "total": { "type": "int", "format": "decimalPattern" }
+    }
+  },
+  "cancel": "Huỷ",
+
+  "deleteTitle": "Xoá dữ liệu đã tải",
+  "deleteBody": "Xoá {count} video đã tải (~{size})? Video sẽ phát trực tuyến từ CDN.",
+  "@deleteBody": {
+    "placeholders": {
+      "count": { "type": "int", "format": "decimalPattern" },
+      "size": { "type": "String" }
+    }
+  },
+  "delete": "Xoá",
+  "batchTitle": "Tải xuống nội dung",
+  "batchBody": "Sẽ tải {count} video (~{size}).\nNên dùng Wi-Fi. Tiếp tục?",
+  "@batchBody": {
+    "placeholders": {
+      "count": { "type": "int", "format": "decimalPattern" },
+      "size": { "type": "String" }
+    }
+  },
+  "later": "Để sau",
+  "download": "Tải",
+  "noWifiTitle": "Không thấy Wi-Fi",
+  "noWifiBody": "Thiết bị đang dùng dữ liệu di động. Tiếp tục tải (~{size})?",
+  "@noWifiBody": {
+    "placeholders": {
+      "size": { "type": "String" }
+    }
+  },
+  "continueLabel": "Tiếp tục",
+  "updateTitle": "Có bản cập nhật nội dung",
+  "updateBody": "{count} video có bản mới (~{size}). Cập nhật để dùng bản mới nhất.",
+  "@updateBody": {
+    "placeholders": {
+      "count": { "type": "int", "format": "decimalPattern" },
+      "size": { "type": "String" }
+    }
+  },
+  "update": "Cập nhật",
+  "updateStarted": "Đang tải lại {count} video cập nhật…",
+  "@updateStarted": {
+    "placeholders": {
+      "count": { "type": "int", "format": "decimalPattern" }
+    }
+  },
+
+  "meaning": "Nghĩa",
+  "@meaning": {
+    "description": "Label above the definition in the word detail sheet."
+  },
+  "replay": "Phát lại",
+  "pause": "Tạm dừng",
+  "play": "Phát",
+  "exitFullscreen": "Thu nhỏ",
+  "fullscreen": "Toàn màn hình",
+  "slowMotion": "Phát chậm",
+  "variantMain": "Chính",
+  "variantNorth": "Miền Bắc",
+  "variantCentral": "Miền Trung",
+  "variantSouth": "Miền Nam",
+
+  "onboardingSkip": "Bỏ qua",
+  "onboardingNext": "Tiếp tục",
+  "onboardingStart": "Bắt đầu",
+  "languageTitle": "Chọn ngôn ngữ",
+  "@languageTitle": {
+    "description": "First onboarding step: interface language."
+  },
+  "languageSubtitle": "Bạn có thể đổi lại bất cứ lúc nào trong Cài đặt.",
+  "introWelcomeTitle": "Chào mừng đến với VSL Dictionary",
+  "introWelcomeBody": "Từ điển Ký hiệu Việt Nam — tra cứu nhanh hơn 4.300 từ ký hiệu, phân theo vùng miền (Bắc / Trung / Nam).",
+  "introOfflineTitle": "Dùng offline hoàn toàn",
+  "introOfflineBody": "Vào Cài đặt → “Tải toàn bộ từ điển” (~513 MB) để tải mọi video về máy. Sau đó tắt “Kiểm tra cập nhật khi mở ứng dụng” — khi đó app không cần mạng nữa.",
+  "introSourceTitle": "Nguồn dữ liệu",
+  "introSourceBody": "Dữ liệu từ dự án “NgonTay” — bản số hóa của Từ điển Ký hiệu Việt Nam (qipedc.moet.gov.vn, Trung tâm Ký hiệu Việt Nam / Bộ Giáo dục và Đào tạo). Ứng dụng dùng làm cá nhân, không phải tác phẩm gốc. Chúc học tốt!",
+
+  "notifRunningTitle": "Đang tải trong nền",
+  "@notifRunningTitle": {
+    "description": "Android download notification title while a batch runs."
+  },
+  "notifRunningBody": "{total} video (~{size})",
+  "@notifRunningBody": {
+    "description": "Android download notification body; total is the batch size.",
+    "placeholders": {
+      "total": { "type": "int", "format": "decimalPattern" },
+      "size": { "type": "String" }
+    }
+  },
+  "notifCompleteTitle": "Hoàn tất tải",
+  "notifCompleteBody": "Đã tải xong {token} video",
+  "@notifCompleteBody": {
+    "description": "Android notification body at 100%.",
+    "placeholders": {
+      "token": {
+        "type": "String",
+        "example": "{numFinished}",
+        "description": "background_downloader placeholder, passed through verbatim."
+      }
+    }
+  },
+  "notifErrorTitle": "Lỗi tải từ điển",
+  "notifErrorBody": "{token} lỗi",
+  "@notifErrorBody": {
+    "description": "Android notification body when downloads failed.",
+    "placeholders": {
+      "token": {
+        "type": "String",
+        "example": "{numFailed}",
+        "description": "background_downloader placeholder, passed through verbatim."
+      }
+    }
+  }
+}

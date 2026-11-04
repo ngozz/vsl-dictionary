@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'l10n/app_localizations.dart';
 import 'screens/home_screen.dart';
 import 'services/dictionary_service.dart';
 import 'services/download_service.dart';
@@ -8,12 +9,20 @@ import 'services/media_service.dart';
 import 'services/settings_service.dart';
 import 'services/update_service.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Default orientation: portrait on mobile; fullscreen mode can rotate temporarily.
   SystemChrome.setPreferredOrientations(const [
     DeviceOrientation.portraitUp,
   ]);
+  // Load persisted settings (theme, language) before the first frame so a
+  // saved English UI never flashes Vietnamese on launch. Failures fall
+  // through: HomeScreen surfaces load errors in its own error state.
+  try {
+    await App.settings.load();
+  } catch (_) {
+    // ignore — handled by the first screen
+  }
   runApp(const VslDictionaryApp());
 }
 
@@ -144,8 +153,11 @@ class _VslDictionaryAppState extends State<VslDictionaryApp> {
   Widget build(BuildContext context) {
     final choice = App.settings.theme;
     return MaterialApp(
-      title: 'Từ điển Ký hiệu Việt Nam',
+      onGenerateTitle: (context) => AppLocalizations.of(context).appWindowTitle,
       debugShowCheckedModeBanner: false,
+      locale: App.settings.language.locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: _buildTheme(ThemeChoice.light),
       // darkTheme holds whichever dark variant is selected (dark or black);
       // the mode itself still routes through ThemeMode below.

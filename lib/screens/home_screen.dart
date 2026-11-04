@@ -4,11 +4,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
 import '../main.dart';
 import '../models/word.dart';
 import '../config.dart' show CdnConfig;
 import '../services/dictionary_service.dart';
-import '../services/settings_service.dart' show ThemeChoice;
+import '../services/settings_service.dart' show AppLanguage, ThemeChoice;
 import '../widgets/download_banner.dart';
 import '../widgets/download_dialogs.dart';
 import '../widgets/fast_scroller.dart';
@@ -70,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
           !App.downloads.active) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
-            _snack('CDN không khả dụng — tải/phát trực tuyến bị tắt.');
+            _snack(context.l10n.cdnUnavailable);
           }
         });
       }
@@ -122,7 +123,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final remaining = dl.remainingEntries();
     final bytes = remaining.fold(0, (a, e) => a + e.size);
     if (remaining.isEmpty) {
-      _snack('Toàn bộ nội dung đã được tải về máy.');
+      _snack(context.l10n.allDownloaded);
       return;
     }
     if (!await DownloadDialogs.confirmBatch(context, remaining.length, bytes)) {
@@ -130,12 +131,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     if (!mounted) return;
     if (!await DownloadDialogs.ensureNetworkOk(context, dl, bytes)) {
-      _snack('Sẽ tải khi có Wi-Fi (mở lại màn hình này).');
+      if (mounted) _snack(context.l10n.downloadOnWifi);
       return;
     }
     if (!mounted) return;
     final started = dl.enqueueAll(remaining);
-    _snack('Đã bắt đầu tải $started video…');
+    _snack(context.l10n.downloadStarted(started));
   }
 
   Future<void> _deleteAllData() async {
@@ -144,7 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!await DownloadDialogs.confirmDeleteAll(context, dl)) return;
     if (!mounted) return;
     final n = await dl.deleteAll();
-    _snack('Đã xoá $n video.');
+    if (mounted) _snack(context.l10n.deletedVideos(n));
   }
 
   Future<void> _showIntro() async {
@@ -155,14 +156,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _manualUpdateCheck() async {
     await App.updates.check();
+    if (!mounted) return;
     if (App.updates.lastError != null) {
-      _snack('Không thể kiểm tra: ${App.updates.lastError}');
+      _snack(context.l10n.updateCheckFailed('${App.updates.lastError}'));
       return;
     }
     final changed = App.updates.changedEntriesFor(App.downloads);
-    if (!mounted) return;
     if (changed.isEmpty) {
-      _snack('Nội dung đã là bản mới nhất.');
+      _snack(context.l10n.upToDate);
       return;
     }
     await DownloadDialogs.showUpdatePrompt(
@@ -229,18 +230,19 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l = context.l10n;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         centerTitle: false,
         elevation: 0,
-        title: const Text(
-          'Từ điển Ký hiệu',
-          style: TextStyle(fontWeight: FontWeight.w700, height: 1.0),
+        title: Text(
+          l.appTitle,
+          style: const TextStyle(fontWeight: FontWeight.w700, height: 1.0),
         ),
         actions: [
           IconButton(
-            tooltip: _favoritesOnly ? 'Xem tất cả' : 'Xem yêu thích',
+            tooltip: _favoritesOnly ? l.favoritesHide : l.favoritesShow,
             icon: Icon(
               _favoritesOnly ? Icons.favorite : Icons.favorite_border,
               color: _favoritesOnly ? theme.colorScheme.error : null,
@@ -252,7 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
             }),
           ),
           IconButton(
-            tooltip: 'Cài đặt',
+            tooltip: l.settingsTooltip,
             icon: const Icon(Icons.settings_outlined),
             onPressed: () => _showSettings(context),
           ),
@@ -263,7 +265,7 @@ class _HomeScreenState extends State<HomeScreen> {
           : _error != null
           ? Center(
               child: Text(
-                'Lỗi tải dữ liệu:\n$_error',
+                l.loadError('$_error'),
                 textAlign: TextAlign.center,
               ),
             )
@@ -280,7 +282,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           onChanged: _onSearchChanged,
                           textInputAction: TextInputAction.search,
                           decoration: InputDecoration(
-                            hintText: 'Tìm từ…',
+                            hintText: l.searchHint,
                             prefixIcon: const Icon(Icons.search),
                             suffixIcon: _searchMode
                                 ? IconButton(
@@ -323,7 +325,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (_results.isEmpty) {
         return Center(
           child: Text(
-            'Không tìm thấy “${_searchController.text.trim()}”',
+            context.l10n.searchNoResults(_searchController.text.trim()),
             style: Theme.of(context).textTheme.bodyLarge,
           ),
         );
@@ -342,7 +344,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (favs.isEmpty) {
         return Center(
           child: Text(
-            'Chưa có từ nào được yêu thích',
+            context.l10n.favoritesEmpty,
             style: Theme.of(context).textTheme.bodyLarge,
           ),
         );
@@ -382,6 +384,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ]),
           builder: (sheetContext, _) {
             final theme = Theme.of(sheetContext);
+            final l = sheetContext.l10n;
             final dl = App.downloads;
             final optionTitle = theme.textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w600,
@@ -397,32 +400,32 @@ class _HomeScreenState extends State<HomeScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Cài đặt', style: theme.textTheme.titleLarge),
+                      Text(l.settingsTitle, style: theme.textTheme.titleLarge),
                       const SizedBox(height: 16),
-                      Text('Vùng ký hiệu mặc định', style: optionTitle),
+                      Text(l.settingsRegion, style: optionTitle),
                       const SizedBox(height: 8),
                       SegmentedButton<Region>(
                         showSelectedIcon: false, // no width change on select
-                        segments: const [
+                        segments: [
                           ButtonSegment(
                             value: Region.north,
                             label: SizedBox(
-                              width: 60,
-                              child: Center(child: Text('Bắc')),
+                              width: 64,
+                              child: Center(child: Text(l.regionNorth)),
                             ),
                           ),
                           ButtonSegment(
                             value: Region.central,
                             label: SizedBox(
-                              width: 60,
-                              child: Center(child: Text('Trung')),
+                              width: 64,
+                              child: Center(child: Text(l.regionCentral)),
                             ),
                           ),
                           ButtonSegment(
                             value: Region.south,
                             label: SizedBox(
-                              width: 60,
-                              child: Center(child: Text('Nam')),
+                              width: 64,
+                              child: Center(child: Text(l.regionSouth)),
                             ),
                           ),
                         ],
@@ -431,30 +434,55 @@ class _HomeScreenState extends State<HomeScreen> {
                             App.settings.setDefaultRegion(sel.first),
                       ),
                       const SizedBox(height: 20),
-                      Text('Giao diện', style: optionTitle),
+                      Text(l.settingsLanguage, style: optionTitle),
+                      const SizedBox(height: 8),
+                      SegmentedButton<AppLanguage>(
+                        showSelectedIcon: false, // no width change on select
+                        segments: [
+                          ButtonSegment(
+                            value: AppLanguage.vi,
+                            label: SizedBox(
+                              width: 96,
+                              child: Center(child: Text(l.languageVietnamese)),
+                            ),
+                          ),
+                          ButtonSegment(
+                            value: AppLanguage.en,
+                            label: SizedBox(
+                              width: 96,
+                              child: Center(child: Text(l.languageEnglish)),
+                            ),
+                          ),
+                        ],
+                        selected: {App.settings.language},
+                        onSelectionChanged: (sel) =>
+                            App.settings.setLanguage(sel.first),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(l.settingsTheme, style: optionTitle),
                       const SizedBox(height: 8),
                       SegmentedButton<ThemeChoice>(
                         showSelectedIcon: false, // no width change on select
-                        segments: const [
+                        segments: [
                           ButtonSegment(
                             value: ThemeChoice.dark,
                             label: SizedBox(
-                              width: 52,
-                              child: Center(child: Text('Tối')),
+                              width: 60,
+                              child: Center(child: Text(l.themeDark)),
                             ),
                           ),
                           ButtonSegment(
                             value: ThemeChoice.black,
                             label: SizedBox(
-                              width: 52,
-                              child: Center(child: Text('Đen')),
+                              width: 60,
+                              child: Center(child: Text(l.themeBlack)),
                             ),
                           ),
                           ButtonSegment(
                             value: ThemeChoice.light,
                             label: SizedBox(
-                              width: 52,
-                              child: Center(child: Text('Sáng')),
+                              width: 60,
+                              child: Center(child: Text(l.themeLight)),
                             ),
                           ),
                         ],
@@ -464,24 +492,21 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       if (dl.active) ...[
                         const SizedBox(height: 20),
-                        Text('Tải xuống & cập nhật', style: optionTitle),
+                        Text(l.settingsDownloads, style: optionTitle),
                         const SizedBox(height: 8),
                         Text(
-                          'Đã tải: ${dl.downloadedCount}/${dl.catalogCount} video '
-                          '(${_fmtMB(dl.downloadedBytes)})',
+                          l.downloadedSummary(
+                            dl.downloadedCount,
+                            dl.catalogCount,
+                            _fmtMB(dl.downloadedBytes),
+                          ),
                           style: muted,
                         ),
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
                           dense: true,
-                          title: Text(
-                            'Kiểm tra cập nhật khi mở ứng dụng',
-                            style: optionTitle,
-                          ),
-                          subtitle: Text(
-                            'Tắt = app hoàn toàn ngoại tuyến sau khi đã tải',
-                            style: muted,
-                          ),
+                          title: Text(l.checkUpdates, style: optionTitle),
+                          subtitle: Text(l.checkUpdatesOff, style: muted),
                           value: App.settings.checkUpdates,
                           onChanged: (v) => App.settings.setCheckUpdates(v),
                         ),
@@ -495,7 +520,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Icons.download_for_offline_outlined,
                                 size: 18,
                               ),
-                              label: const Text('Tải toàn bộ từ điển'),
+                              label: Text(l.downloadAll),
                               onPressed: () {
                                 Navigator.pop(sheetContext);
                                 _downloadAll();
@@ -511,7 +536,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       ),
                                     )
                                   : const Icon(Icons.sync, size: 18),
-                              label: const Text('Kiểm tra cập nhật'),
+                              label: Text(l.checkNow),
                               onPressed: App.updates.checking
                                   ? null
                                   : () {
@@ -521,7 +546,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                             OutlinedButton.icon(
                               icon: const Icon(Icons.delete_outline, size: 18),
-                              label: const Text('Xoá dữ liệu đã tải'),
+                              label: Text(l.deleteDownloaded),
                               onPressed: dl.downloadedCount == 0
                                   ? null
                                   : () {
@@ -533,7 +558,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         TextButton.icon(
                           icon: const Icon(Icons.slideshow, size: 18),
-                          label: const Text('Xem lại hướng dẫn'),
+                          label: Text(l.replayIntro),
                           onPressed: () {
                             Navigator.pop(sheetContext);
                             _showIntro();
@@ -542,8 +567,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                       const SizedBox(height: 16),
                       Text(
-                        'Số từ: ${App.dictionary.count}\n\n'
-                        'Dữ liệu từ dự án “NgonTay”.',
+                        '${l.wordCount(App.dictionary.count)}\n\n'
+                        '${l.dataCredit}',
                         style: muted,
                       ),
                     ],
@@ -599,10 +624,10 @@ class _CategoryTabs extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          chip(HomeTab.all, 'Tất cả'),
-          chip(HomeTab.words, 'Từ vựng'),
-          chip(HomeTab.numbers, 'Số đếm'),
-          chip(HomeTab.alphabet, 'Bảng chữ cái'),
+          chip(HomeTab.all, context.l10n.tabAll),
+          chip(HomeTab.words, context.l10n.tabWords),
+          chip(HomeTab.numbers, context.l10n.tabNumbers),
+          chip(HomeTab.alphabet, context.l10n.tabAlphabet),
         ],
       ),
     );

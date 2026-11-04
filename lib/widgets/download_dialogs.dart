@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
 import '../main.dart';
 import '../services/download_service.dart';
 
@@ -21,22 +22,21 @@ abstract final class DownloadDialogs {
   /// "Xoá tất cả dữ liệu đã tải?" — the cleanup confirmation.
   static Future<bool> confirmDeleteAll(
       BuildContext context, DownloadService dl) async {
+    final l = context.l10n;
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Xoá dữ liệu đã tải'),
-            content: Text(
-                'Xoá ${dl.downloadedCount} video đã tải '
-                '(~${_fmtBytes(dl.downloadedBytes)})? '
-                'Video sẽ phát trực tuyến từ CDN.'),
+            title: Text(l.deleteTitle),
+            content: Text(l.deleteBody(
+                dl.downloadedCount, _fmtBytes(dl.downloadedBytes))),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Huỷ'),
+                child: Text(l.cancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Xoá'),
+                child: Text(l.delete),
               ),
             ],
           ),
@@ -47,21 +47,20 @@ abstract final class DownloadDialogs {
   /// "Sẽ tải N video (~X MB)" — the big warning before download-all.
   static Future<bool> confirmBatch(
       BuildContext context, int fileCount, int bytes) async {
+    final l = context.l10n;
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Tải xuống nội dung'),
-            content: Text(
-                'Sẽ tải $fileCount video (~${_fmtBytes(bytes)}).\n'
-                'Nên dùng Wi-Fi. Tiếp tục?'),
+            title: Text(l.batchTitle),
+            content: Text(l.batchBody(fileCount, _fmtBytes(bytes))),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Để sau'),
+                child: Text(l.later),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Tải'),
+                child: Text(l.download),
               ),
             ],
           ),
@@ -72,21 +71,20 @@ abstract final class DownloadDialogs {
   /// Second gate when no Wi-Fi is visible: keep bytes flowing consciously.
   static Future<bool> confirmMobileData(
       BuildContext context, int bytes) async {
+    final l = context.l10n;
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Không thấy Wi-Fi'),
-            content: Text(
-                'Thiết bị đang dùng dữ liệu di động. '
-                'Tiếp tục tải (~${_fmtBytes(bytes)})?'),
+            title: Text(l.noWifiTitle),
+            content: Text(l.noWifiBody(_fmtBytes(bytes))),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Huỷ'),
+                child: Text(l.cancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Tiếp tục'),
+                child: Text(l.continueLabel),
               ),
             ],
           ),
@@ -97,6 +95,7 @@ abstract final class DownloadDialogs {
   /// The dismissible startup prompt: changed-file counts, [Cập nhật] applies.
   static Future<void> showUpdatePrompt(
       BuildContext context, int changedCount, int bytes) async {
+    final l = context.l10n;
     // Resolve the messenger before the dialog closes: looking it up from the
     // dialog's own (then deactivated) context is unsafe.
     final messenger = ScaffoldMessenger.of(context);
@@ -104,10 +103,9 @@ abstract final class DownloadDialogs {
       context: context,
       builder: (context) => AlertDialog(
         icon: const Icon(Icons.new_releases_outlined),
-        title: const Text('Có bản cập nhật nội dung'),
+        title: Text(l.updateTitle),
         content: Text(
-            '$changedCount video có bản mới (~${_fmtBytes(bytes)}). '
-            'Cập nhật để dùng bản mới nhất.',
+            l.updateBody(changedCount, _fmtBytes(bytes)),
             style: Theme.of(context).textTheme.bodyMedium),
         actions: [
           TextButton(
@@ -115,7 +113,7 @@ abstract final class DownloadDialogs {
               App.updates.dismissedThisSession = true;
               Navigator.pop(context);
             },
-            child: const Text('Để sau'),
+            child: Text(l.later),
           ),
           FilledButton(
             onPressed: () {
@@ -124,9 +122,9 @@ abstract final class DownloadDialogs {
               App.updates.dismissedThisSession = true;
               Navigator.pop(context);
               messenger.showSnackBar(
-                  SnackBar(content: Text('Đang tải lại $n video cập nhật…')));
+                  SnackBar(content: Text(l.updateStarted(n))));
             },
-            child: const Text('Cập nhật'),
+            child: Text(l.update),
           ),
         ],
       ),

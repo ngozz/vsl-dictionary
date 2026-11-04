@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
+import '../l10n/l10n.dart';
 import '../main.dart';
 import '../models/word.dart';
 import '../config.dart' show CdnConfig;
@@ -319,11 +320,21 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
 
   Widget _regionSelector(List<VideoVariant> variants) {
     if (variants.length <= 1) return const SizedBox.shrink();
+    final l = context.l10n;
     return SizedBox(
       width: double.infinity,
       child: SegmentedButton<VideoVariant>(
         segments: [
-          for (final v in variants) ButtonSegment(value: v, label: Text(v.label())),
+          for (final v in variants)
+            ButtonSegment(
+              value: v,
+              label: Text(switch (v) {
+                VideoVariant.main => l.variantMain,
+                VideoVariant.north => l.variantNorth,
+                VideoVariant.central => l.variantCentral,
+                VideoVariant.south => l.variantSouth,
+              }),
+            ),
         ],
         selected: {_currentVariant ?? variants.first},
         onSelectionChanged: (sel) => _selectVariant(sel.first),
@@ -343,7 +354,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Nghĩa',
+            Text(context.l10n.meaning,
                 style: Theme.of(context).textTheme.labelLarge
                     ?.copyWith(color: Theme.of(context).colorScheme.primary)),
             const SizedBox(height: 6),
@@ -534,6 +545,7 @@ class _VideoControlsState extends State<VideoControls> {
     return ValueListenableBuilder<VideoPlayerValue>(
       valueListenable: widget.controller,
       builder: (context, value, _) {
+        final l = context.l10n;
         final durMs = value.duration.inMilliseconds;
         final maxMs = durMs > 0 ? durMs.toDouble() : 1.0;
         final posMs = (_dragMs ?? value.position.inMilliseconds.toDouble())
@@ -555,10 +567,10 @@ class _VideoControlsState extends State<VideoControls> {
                         ? Icons.pause
                         : Icons.play_arrow,
                 tooltip: ended
-                    ? 'Phát lại'
+                    ? l.replay
                     : value.isPlaying
-                        ? 'Tạm dừng'
-                        : 'Phát',
+                        ? l.pause
+                        : l.play,
                 onPressed: () => _togglePlay(value, ended),
               ),
               Expanded(
@@ -615,7 +627,7 @@ class _VideoControlsState extends State<VideoControls> {
                 icon: widget.isFullscreen
                     ? Icons.fullscreen_exit
                     : Icons.fullscreen,
-                tooltip: widget.isFullscreen ? 'Thu nhỏ' : 'Toàn màn hình',
+                tooltip: widget.isFullscreen ? l.exitFullscreen : l.fullscreen,
                 onPressed: widget.onFullscreen,
               ),
             ],
@@ -713,7 +725,7 @@ class _SpeedPill extends StatelessWidget {
     final fg = active ? Colors.black87 : Colors.white;
     return Semantics(
       button: true,
-      label: 'Phát chậm',
+      label: context.l10n.slowMotion,
       child: Material(
         color: active ? Colors.white : Colors.white24,
         shape: const StadiumBorder(),
