@@ -9,11 +9,18 @@ enum ThemeChoice { dark, black, light }
 
 /// Interface language. Vietnamese stays the default: the content itself is
 /// Vietnamese, and existing installs keep what they already had.
+///
+///  - [vi]     purely Vietnamese (the original interface)
+///  - [en]     purely English: English headwords, English-only search
+///  - [mixed]  English headwords with Vietnamese kept as a companion
+///             (subtitle, definition underneath, bilingual search)
 enum AppLanguage {
   vi,
-  en;
+  en,
+  mixed;
 
-  Locale get locale => Locale(name);
+  /// Locale for the interface chrome. "Mixed" uses the English UI.
+  Locale get locale => Locale(this == AppLanguage.mixed ? 'en' : name);
 }
 
 class SettingsService extends ChangeNotifier {
@@ -41,6 +48,13 @@ class SettingsService extends ChangeNotifier {
   Set<String> get favorites => _favorites;
   ThemeChoice get theme => _theme;
   AppLanguage get language => _language;
+
+  /// True when the headword language is English (`en` and `mixed`).
+  bool get showsEnglish => _language != AppLanguage.vi;
+
+  /// True for [AppLanguage.mixed]: English leads but Vietnamese stays
+  /// visible (subtitle line, definition underneath, bilingual search).
+  bool get isMixed => _language == AppLanguage.mixed;
   bool get checkUpdates => _checkUpdates;
   bool get introSeen => _introSeen;
 

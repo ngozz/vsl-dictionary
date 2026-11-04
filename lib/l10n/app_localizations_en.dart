@@ -25,7 +25,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTooltip => 'Settings';
 
   @override
-  String get searchHint => 'Search words…';
+  String get searchHint => 'Search English or Vietnamese…';
 
   @override
   String searchNoResults(String query) {
@@ -91,6 +91,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get languageEnglish => 'English';
+
+  @override
+  String get languageMixed => 'Mixed';
 
   @override
   String get settingsDownloads => 'Downloads & updates';
@@ -271,7 +274,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get meaning => 'Meaning (Vietnamese)';
+  String get meaning => 'Meaning';
 
   @override
   String get replay => 'Replay';

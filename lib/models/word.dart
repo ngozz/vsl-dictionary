@@ -40,6 +40,21 @@ class Word {
   bool hasDescription() => description.trim().isNotEmpty;
   bool hasEnglishDescription() => descriptionEn.trim().isNotEmpty;
   bool hasEnglishWord() => wordEn.trim().isNotEmpty;
+
+  /// Headword shown as the primary line for the current interface language.
+  /// English falls back to Vietnamese when a gloss is missing.
+  String displayWord({required bool english}) =>
+      english && hasEnglishWord() ? wordEn : word;
+
+  /// Companion headword for the smaller line, or null when it should not be
+  /// shown: only Mixed mode has one, and only when it would not duplicate
+  /// the primary line (identical strings, or a missing gloss that already
+  /// made [displayWord] fall back to Vietnamese).
+  String? subtitleWord({required bool bilingual}) {
+    if (!bilingual) return null;
+    final en = wordEn.trim();
+    return en.isEmpty || en == word ? null : word;
+  }
 }
 
 enum VideoVariant {

@@ -152,6 +152,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
             _LanguageOption(
               label: switch (lang) {
                 AppLanguage.vi => l.languageVietnamese,
+                AppLanguage.mixed => l.languageMixed,
                 AppLanguage.en => l.languageEnglish,
               },
               selected: App.settings.language == lang,

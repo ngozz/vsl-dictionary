@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
 
+import 'package:vsl_dictionary/models/word.dart';
 import 'package:vsl_dictionary/services/dictionary_service.dart';
 
 void main() {
@@ -135,6 +136,89 @@ void main() {
     ]);
     expect(s.search('d'), isNotEmpty);
     expect(s.search('a'), isEmpty); // tier 6 needs 3+ chars
+  });
+
+  // English interface modes: `searchEnglish` pulls the glosses into the
+  // Vietnamese tiers; `searchVietnamese: false` is the pure-English mode.
+  // Defaults (`searchEnglish: false, searchVietnamese: true`) stay the
+  // original Vietnamese-only search.
+  group('english / mixed modes', () {
+    Word w(String id, String word, String en) => Word(
+        id: id, word: word, description: '', wordEn: en, type: '0');
+
+    DictionaryService service(List<Word> words) {
+      final s = DictionaryService();
+      s.loadWordsForTest(words);
+      return s;
+    }
+
+    test('mixed: gloss exact match is found, flagged, highlighted at 0', () {
+      final s = service([
+        w('1', 'con chó', 'dog'),
+        w('2', 'chó', 'dog'),
+      ]);
+      final rs = s.search('dog', searchEnglish: true);
+      expect(wordsOf(rs).first, 'chó'); // Vietnamese collation within tier 1
+      expect(rs.first.onEnglish, isTrue);
+      expect(rs.first.matchStart, 0);
+    });
+
+    test('vietnamese-only mode ignores glosses entirely', () {
+      final s = service([w('1', 'con chó', 'dog')]);
+      expect(s.search('dog'), isEmpty);
+      expect(s.search('cho'), isNotEmpty); // Vietnamese still searchable
+    });
+
+    test('mixed: vietnamese exact beats english prefix', () {
+      final s = service([
+        w('1', 'chó', 'dog'),
+        w('2', 'đũa', 'chopsticks'),
+      ]);
+      final rs = s.search('cho', searchEnglish: true);
+      expect(wordsOf(rs).first, 'chó');
+      expect(rs.first.onEnglish, isFalse);
+    });
+
+    test('english substring is tier 7 and vietnamese-only mode misses it',
+        () {
+      final s = service([w('1', 'đũa', 'chopsticks')]);
+      final rs = s.search('ick', searchEnglish: true);
+      expect(rs, isNotEmpty);
+      expect(rs.single.rank, 7);
+      expect(rs.single.onEnglish, isTrue);
+      expect(s.search('ick'), isEmpty);
+    });
+
+    test('mixed: entries without a gloss still match by headword', () {
+      final s = service([w('1', 'mười hai', '')]);
+      final rs = s.search('muoi', searchEnglish: true);
+      expect(wordsOf(rs), ['mười hai']);
+      expect(rs.single.onEnglish, isFalse);
+    });
+
+    test('pure english: glosses match, vietnamese headwords do not', () {
+      final s = service([
+        w('1', 'con chó', 'dog'),
+        w('2', 'một', ''),
+      ]);
+      expect(s.search('dog', searchEnglish: true, searchVietnamese: false),
+          isNotEmpty);
+      // Diacritic-less Vietnamese no longer matches a translated entry.
+      expect(s.search('cho', searchEnglish: true, searchVietnamese: false),
+          isEmpty);
+      // …but untranslated entries stay findable via their headword.
+      final rs = s.search('mot', searchEnglish: true, searchVietnamese: false);
+      expect(wordsOf(rs), ['một']);
+      expect(rs.single.onEnglish, isFalse);
+    });
+
+    test('both flags disabled finds nothing', () {
+      final s = service([w('1', 'chó', 'dog')]);
+      expect(
+        s.search('cho', searchEnglish: false, searchVietnamese: false),
+        isEmpty,
+      );
+    });
   });
 }
 

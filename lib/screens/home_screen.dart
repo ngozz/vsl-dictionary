@@ -189,7 +189,13 @@ class _HomeScreenState extends State<HomeScreen> {
       if (_searchMode) {
         // Untrimmed: a trailing space marks the last syllable complete
         // ("do " matches "do Thái", not "doanh trại").
-        _results = App.dictionary.search(value, typeFilter: _typeFilter);
+        final lang = App.settings.language;
+        _results = App.dictionary.search(
+          value,
+          typeFilter: _typeFilter,
+          searchEnglish: lang != AppLanguage.vi,
+          searchVietnamese: lang != AppLanguage.en,
+        );
       } else {
         _results = const [];
         // Leaving search: refresh the browse list for the tab that is selected
@@ -207,9 +213,12 @@ class _HomeScreenState extends State<HomeScreen> {
       // user clears the query afterwards, the list must belong to this tab.
       _browseList = App.dictionary.browse(typeFilter: _typeFilter);
       if (_searchMode) {
+        final lang = App.settings.language;
         _results = App.dictionary.search(
           _searchController.text,
           typeFilter: _typeFilter,
+          searchEnglish: lang != AppLanguage.vi,
+          searchVietnamese: lang != AppLanguage.en,
         );
       }
     });
@@ -450,9 +459,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           ButtonSegment(
+                            value: AppLanguage.mixed,
+                            label: SizedBox(
+                              width: 72,
+                              child: Center(child: Text(l.languageMixed)),
+                            ),
+                          ),
+                          ButtonSegment(
                             value: AppLanguage.en,
                             label: SizedBox(
-                              width: 96,
+                              width: 72,
                               child: Center(child: Text(l.languageEnglish)),
                             ),
                           ),
@@ -680,7 +696,9 @@ class _GroupedBrowseListState extends State<_GroupedBrowseList> {
   @override
   void didUpdateWidget(_GroupedBrowseList old) {
     super.didUpdateWidget(old);
-    if (!identical(old.words, widget.words) || old.group != widget.group) {
+    if (!identical(old.words, widget.words) ||
+        old.group != widget.group ||
+        _lastEnglish != _english) {
       _rebuildRows();
       if (_scroll.hasClients) _scroll.jumpTo(0);
     }
@@ -692,9 +710,15 @@ class _GroupedBrowseListState extends State<_GroupedBrowseList> {
     super.dispose();
   }
 
-  // lowercase first: the fold map only has lowercase accented letters
-  static String _fold(Word w) =>
-      DictionaryService.foldAscii(w.word.toLowerCase()).trim();
+  bool get _english => App.settings.showsEnglish; // headword language
+  bool _lastEnglish = false; // rebuild rows when the language flips
+
+  // Sort/section key for the headword that is actually displayed: the English
+  // gloss in the English interface (so sections and the rail read A, B, C…),
+  // the Vietnamese word otherwise (the original behavior).
+  String _fold(Word w) =>
+      DictionaryService.foldAscii(w.displayWord(english: _english).toLowerCase())
+          .trim();
 
   static String _sectionOf(String folded) {
     if (folded.isEmpty) return '#';
@@ -704,12 +728,16 @@ class _GroupedBrowseListState extends State<_GroupedBrowseList> {
   }
 
   void _rebuildRows() {
+    _lastEnglish = _english;
     // Sort key computed once per word, sorted by the folded form so that
     // á, đ, ô… sort into their letter group instead of after 'z'.
     final keyed = [for (final w in widget.words) (_fold(w), w)]
       ..sort((a, b) {
         final c = a.$1.compareTo(b.$1);
-        return c != 0 ? c : a.$2.word.compareTo(b.$2.word);
+        return c != 0
+            ? c
+            : a.$2.displayWord(english: _english)
+                .compareTo(b.$2.displayWord(english: _english));
       });
 
     final rows = <_Row>[];
@@ -812,8 +840,9 @@ class _SectionHeader extends StatelessWidget {
 
 /// A lean list tile: no Card. With 3,325 rows in the "Tất cả" tab, heavy
 /// tiles make scrolling unusable. Definitions are not shown in lists
-/// (available in the detail screen); only the English gloss rides under the
-/// Vietnamese headword.
+/// (available in the detail screen). Vietnamese mode shows the original
+/// single-language row; English mode shows the English gloss as the headword
+/// with the Vietnamese word beneath.
 class _WordTile extends StatelessWidget {
   final SearchResult result;
   final VoidCallback onTap;
@@ -824,12 +853,18 @@ class _WordTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final w = result.word;
     final theme = Theme.of(context);
-    final match = result.matchStart;
-    final matchLen = result.matchLength;
-    // Highlight offsets come from the normalized text; clamp in case the raw
-    // string length differs (decomposed Unicode / irregular whitespace).
-    final hasHighlight =
-        match >= 0 && matchLen > 0 && match + matchLen <= w.word.length;
+    final english = App.settings.showsEnglish; // headword language
+    final bilingual = App.settings.isMixed; // + Vietnamese companion line
+    final primary = w.displayWord(english: english);
+    final subtitle = w.subtitleWord(bilingual: bilingual);
+    // The match can sit on either line: on the English gloss when the query
+    // matched English, otherwise on the Vietnamese headword (also when the
+    // gloss is missing and the primary line fell back to Vietnamese).
+    final highlightPrimary = !bilingual || result.onEnglish || subtitle == null;
+    final highlight = TextStyle(
+      color: theme.colorScheme.error,
+      fontWeight: FontWeight.w800,
+    );
 
     return Center(
       child: Padding(
@@ -851,51 +886,23 @@ class _WordTile extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          hasHighlight
-                              ? RichText(
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  text: TextSpan(
-                                    style: theme.textTheme.bodyLarge?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      color: theme.colorScheme.onSurface,
-                                    ),
-                                    children: [
-                                      TextSpan(
-                                          text: w.word.substring(0, match)),
-                                      TextSpan(
-                                        text: w.word.substring(
-                                          match,
-                                          match + matchLen,
-                                        ),
-                                        style: TextStyle(
-                                          color: theme.colorScheme.error,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                      TextSpan(
-                                        text:
-                                            w.word.substring(match + matchLen),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              : Text(
-                                  w.word,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodyLarge?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                          if (w.hasEnglishWord())
-                            Text(
-                              w.wordEn,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                          _wordLine(
+                            primary,
+                            highlight: highlightPrimary,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                            highlightStyle: highlight,
+                          ),
+                          if (subtitle != null)
+                            _wordLine(
+                              subtitle,
+                              highlight: !highlightPrimary,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
+                              highlightStyle: highlight,
                             ),
                         ],
                       ),
@@ -912,6 +919,35 @@ class _WordTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  /// One tile line. With [highlight], the matched range is accent-colored —
+  /// offsets come from the normalized matched string, so clamp on length in
+  /// case the raw string differs (decomposed Unicode / irregular whitespace).
+  Widget _wordLine(
+    String text, {
+    required bool highlight,
+    required TextStyle? style,
+    required TextStyle? highlightStyle,
+  }) {
+    final m = result.matchStart;
+    final len = result.matchLength;
+    if (!highlight || m < 0 || len <= 0 || m + len > text.length) {
+      return Text(text,
+          maxLines: 1, overflow: TextOverflow.ellipsis, style: style);
+    }
+    return Text.rich(
+      TextSpan(
+        style: style,
+        children: [
+          TextSpan(text: text.substring(0, m)),
+          TextSpan(text: text.substring(m, m + len), style: highlightStyle),
+          TextSpan(text: text.substring(m + len)),
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }

@@ -229,6 +229,8 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final english = App.settings.showsEnglish; // headword language
+    final bilingual = App.settings.isMixed; // + Vietnamese companion
     // Hoisted so variant switches / play-state rebuilds don't re-scan the
     // asset manifest several times per build.
     final images = App.media.imageAssets(_word);
@@ -248,31 +250,37 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
               slivers: [
                 SliverAppBar(
                   pinned: true,
-                  toolbarHeight: _word.hasEnglishWord() ? 72 : kToolbarHeight,
+                  toolbarHeight: english && bilingual && _word.hasEnglishWord()
+                      ? 72
+                      : kToolbarHeight,
                   backgroundColor: theme.scaffoldBackgroundColor,
                   surfaceTintColor: Colors.transparent,
-                  title: _word.hasEnglishWord()
+                  // English modes: English gloss as the title. Mixed keeps
+                  // the Vietnamese word beneath; pure English drops it.
+                  // Vietnamese mode: the original single-line title only.
+                  title: english && _word.hasEnglishWord()
                       ? Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              _word.word,
+                              _word.wordEn,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            Text(
-                              _word.wordEn,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w500,
+                            if (bilingual)
+                              Text(
+                                _word.word,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
                           ],
                         )
                       : Text(
@@ -297,8 +305,9 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                       _buildVideoBlock(variants),
                       const SizedBox(height: 16),
                       if (_word.hasDescription() ||
-                          _word.hasEnglishDescription()) ...[
-                        _buildDescription(),
+                          (english && _word.hasEnglishDescription())) ...[
+                        _buildDescription(
+                            english: english, bilingual: bilingual),
                         const SizedBox(height: 12),
                       ],
                       if (images.isNotEmpty) ...[
@@ -369,11 +378,20 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     );
   }
 
-  Widget _buildDescription() {
+  Widget _buildDescription(
+      {required bool english, required bool bilingual}) {
     final theme = Theme.of(context);
     final vi = _word.description.trim();
-    final en = _word.descriptionEn.trim();
+    // Vietnamese mode shows the original Vietnamese-only card; pure English
+    // shows the English definition with the Vietnamese text only as fallback
+    // when a translation is missing.
+    final en = english ? _word.descriptionEn.trim() : '';
     final hasEn = en.isNotEmpty;
+    final viUnder = hasEn && bilingual; // Mixed: Vietnamese underneath
+    // Vietnamese text is shown when it is all there is (any language) or as
+    // the Mixed companion line — never in pure English when a translation
+    // exists.
+    final showVi = vi.isNotEmpty && (!hasEn || viUnder);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -390,11 +408,11 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
           const SizedBox(height: 6),
           if (hasEn)
             Text(en, style: theme.textTheme.bodyMedium),
-          if (hasEn && vi.isNotEmpty) const SizedBox(height: 6),
-          if (vi.isNotEmpty)
+          if (viUnder && showVi) const SizedBox(height: 6),
+          if (showVi)
             Text(
               vi,
-              style: hasEn
+              style: viUnder
                   ? theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     )

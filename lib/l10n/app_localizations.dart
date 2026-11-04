@@ -254,6 +254,12 @@ abstract class AppLocalizations {
   /// **'English'**
   String get languageEnglish;
 
+  /// No description provided for @languageMixed.
+  ///
+  /// In vi, this message translates to:
+  /// **'Kết hợp'**
+  String get languageMixed;
+
   /// Settings heading for downloading / updating content.
   ///
   /// In vi, this message translates to:

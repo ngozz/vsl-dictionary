@@ -93,6 +93,9 @@ class AppLocalizationsVi extends AppLocalizations {
   String get languageEnglish => 'English';
 
   @override
+  String get languageMixed => 'Kết hợp';
+
+  @override
   String get settingsDownloads => 'Tải xuống & cập nhật';
 
   @override

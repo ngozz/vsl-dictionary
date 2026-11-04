@@ -7,22 +7,34 @@ import '../models/word.dart';
 
 /// A search result with highlight info.
 ///
-/// `rank` is a match tier (lower = better):
+/// `rank` is a match tier (lower = better). Vietnamese tiers:
 ///   1. whole entry equals the query        (do / đỏ / dò)
 ///   2. entry starts with query syllables   (do Thái for "do")
 ///   3. query syllables later in entry      (tự do, cá đỏ)
 ///   4. first syllable starts with query    (doanh trại, dọc)
 ///   5. later syllable starts with query    (mua doanh nghiệp)
 ///   6. mid-syllable substring              (bà dô)
+/// English glosses (searched in the English interface) join the same scale:
+///   1. gloss equals the query              (dog)
+///   2. gloss starts with the query         (dogsled for "dog")
+///   3. query at a word start in the gloss  (hot dog for "dog")
+///   7. substring inside a gloss word       ("psychology" for "cho")
+/// so exact and prefix matches in either language rank above substrings.
 class SearchResult {
   final Word word;
   final int rank;
 
-  /// Match position in the displayed word (normalized-form offsets).
+  /// Match position in the matched string (normalized-form offsets): the
+  /// Vietnamese word, or the English gloss when [onEnglish] is set.
   final int matchStart;
   final int matchLength;
 
-  const SearchResult(this.word, this.rank, this.matchStart, this.matchLength);
+  /// True when the match (and therefore [matchStart]) refers to the English
+  /// gloss instead of the Vietnamese headword.
+  final bool onEnglish;
+
+  const SearchResult(this.word, this.rank, this.matchStart, this.matchLength,
+      {this.onEnglish = false});
 }
 
 class DictionaryService {
@@ -31,6 +43,8 @@ class DictionaryService {
   late List<String> _lower; // lowercase, single-spaced, accents kept
   late List<String> _folded; // same, ASCII-folded (same length)
   late List<List<String>> _syls; // folded syllables per entry
+  late List<String> _enFolded; // folded English gloss ('' when missing)
+  late List<int> _enSyls; // English gloss word count (0 when missing)
   late List<int> _alpha; // Vietnamese alphabetical rank per entry
   late List<Word> _byAlpha; // browse() order
 
@@ -103,6 +117,10 @@ class DictionaryService {
     // foldAscii is 1:1 in length, so folded offsets == raw offsets.
     _folded = [for (final l in _lower) foldAscii(l)];
     _syls = [for (final f in _folded) f.split(' ')];
+    // Same normalization for the English glosses (also 1:1, so English
+    // highlight offsets line up with the raw gloss).
+    _enFolded = [for (final w in _words) foldAscii(_normalize(w.wordEn))];
+    _enSyls = [for (final f in _enFolded) f.isEmpty ? 0 : f.split(' ').length];
     final keys = [for (final l in _lower) _collationKey(l)];
     final order = List<int>.generate(_words.length, (i) => i)
       ..sort((a, b) => keys[a].compareTo(keys[b]));
@@ -131,7 +149,18 @@ class DictionaryService {
   /// All query syllables but the last must match whole syllables; the last
   /// may be a prefix (still being typed). A trailing space marks the last
   /// syllable as finished ("do " finds "do Thái", not "doanh trại").
-  List<SearchResult> search(String query, {String? typeFilter, int? limit}) {
+  ///
+  /// [searchEnglish] also matches the English glosses and merges them into
+  /// the same tiers (ties prefer the English gloss — the string the English
+  /// UI displays first). [searchVietnamese] matches the Vietnamese headwords.
+  /// Both enabled = "Mixed" mode; English-only mode keeps glossless entries
+  /// findable by falling back to their Vietnamese headword. With both
+  /// disabled the result is empty.
+  List<SearchResult> search(String query,
+      {String? typeFilter,
+      int? limit,
+      bool searchEnglish = false,
+      bool searchVietnamese = true}) {
     if (!_loaded) return const [];
     final qLower = _normalize(query);
     if (qLower.isEmpty) return const [];
@@ -144,22 +173,63 @@ class DictionaryService {
     final hits = <_Scored>[];
     for (var i = 0; i < _words.length; i++) {
       if (typeFilter != null && _words[i].type != typeFilter) continue;
-      final f = _folded[i];
-      final pos = f.indexOf(q); // every tier implies a substring hit
-      if (pos < 0) continue;
-      final h = _score(f, _syls[i], pos, q, qs, lastComplete);
-      if (h == null) continue;
 
-      // Accent preference: exact-accent matches rank above folded ones,
-      // but only when the user actually typed a diacritic.
+      // Vietnamese match (the original matcher). Pure-English mode skips it
+      // except for entries without an English gloss, so nothing becomes
+      // unfindable just because it is untranslated.
+      (int, int)? vn; // (tier, matchStart)
       var miss = 0;
-      if (accented) {
-        final slice = _lower[i].substring(h.$2, h.$2 + q.length);
-        final same =
-            queryHasTone ? slice == qLower : _stripTone(slice) == qLower;
-        if (!same) miss = 1;
+      final useVn =
+          searchVietnamese || (searchEnglish && _enFolded[i].isEmpty);
+      if (useVn) {
+        final f = _folded[i];
+        final pos = f.indexOf(q); // every tier implies a substring hit
+        if (pos >= 0) {
+          final h = _score(f, _syls[i], pos, q, qs, lastComplete);
+          if (h != null) {
+            // Accent preference: exact-accent matches rank above folded
+            // ones, but only when the user actually typed a diacritic.
+            if (accented) {
+              final slice = _lower[i].substring(h.$2, h.$2 + q.length);
+              final same = queryHasTone
+                  ? slice == qLower
+                  : _stripTone(slice) == qLower;
+              if (!same) miss = 1;
+            }
+            vn = h;
+          }
+        }
       }
-      hits.add(_Scored(i, h.$1, h.$2, miss, _syls[i].length));
+
+      // English match (requested by the English and Mixed interfaces).
+      (int, int)? en;
+      if (searchEnglish) {
+        final ef = _enFolded[i];
+        if (ef.isNotEmpty) {
+          final epos = ef.indexOf(q);
+          if (epos >= 0) {
+            final tier = _enTier(ef, q, epos, lastComplete);
+            if (tier != 0) en = (tier, epos);
+          }
+        }
+      }
+
+      // Merge: best tier wins; on a tie the English gloss wins.
+      int tier, start, syllables;
+      bool onEnglish;
+      if (vn == null && en == null) continue;
+      if (vn == null || (en != null && en.$1 <= vn.$1)) {
+        (tier, start) = en!;
+        syllables = _enSyls[i];
+        onEnglish = true;
+      } else {
+        (tier, start) = vn;
+        syllables = _syls[i].length;
+        onEnglish = false;
+      }
+
+      hits.add(_Scored(
+          i, tier, start, onEnglish ? 0 : miss, syllables, onEnglish));
     }
 
     hits.sort((a, b) {
@@ -174,8 +244,9 @@ class DictionaryService {
     final n = (limit != null && limit < hits.length) ? limit : hits.length;
     return [
       for (var k = 0; k < n; k++)
-        SearchResult(
-            _words[hits[k].index], hits[k].tier, hits[k].start, q.length)
+        SearchResult(_words[hits[k].index], hits[k].tier, hits[k].start,
+            q.length,
+            onEnglish: hits[k].onEnglish)
     ];
   }
 
@@ -212,6 +283,17 @@ class DictionaryService {
     if (bestTier != 0) return (bestTier, bestStart);
     if (!lastComplete && q.length >= _minSubstringLen) return (6, pos);
     return null;
+  }
+
+  /// English gloss tier for a match at [pos]: 1 exact, 2 starts with the
+  /// query, 3 query at a word start, 7 substring (below every Vietnamese
+  /// tier), 0 no match.
+  static int _enTier(String folded, String q, int pos, bool lastComplete) {
+    if (folded.length == q.length) return 1; // contains + same length
+    if (pos == 0) return 2;
+    if (folded[pos - 1] == ' ') return 3;
+    if (!lastComplete && q.length >= _minSubstringLen) return 7;
+    return 0;
   }
 
   /// All words of a category, Vietnamese alphabetical (All / category browse).
@@ -305,7 +387,9 @@ class _Scored {
   final int start;
   final int accentMiss;
   final int syllables;
+  final bool onEnglish; // match landed on the English gloss
 
-  _Scored(this.index, this.tier, this.start, this.accentMiss, this.syllables);
+  _Scored(this.index, this.tier, this.start, this.accentMiss, this.syllables,
+      this.onEnglish);
 }
 
