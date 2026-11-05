@@ -9,7 +9,7 @@ import 'download_service.dart';
 ///
 /// Media lives under `data/videos/` and `data/images/`; an `AssetManifest`
 /// snapshot is used for constant-time existence checks. The API is network-
-/// shaped so CDN mode can resolve the same names without extra branching.
+/// shaped so the lite flavor can resolve the same names without extra branching.
 class MediaService {
   static const _videoPrefix = 'data/videos/';
   static MediaService? _instance;
@@ -36,7 +36,7 @@ class MediaService {
   /// Whether this word has a video for the given variant.
   bool hasVideo(String wordId, VideoVariant variant) {
     if (videoAsset(wordId, variant) != null) return true;
-    // CDN mode / web: the video exists even when its asset is not bundled —
+    // Lite flavor / web: the video exists even when its asset is not bundled —
     // the catalog (bundled manifest) knows.
     return (CdnConfig.useCdn || kIsWeb) &&
         DownloadService().canStream(videoName(wordId, variant));

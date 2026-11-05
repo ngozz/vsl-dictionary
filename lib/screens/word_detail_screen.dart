@@ -77,15 +77,11 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     if (old != null) unawaited(old.dispose());
   }
 
-  void _selectVariant(VideoVariant v, {bool forceAsset = false}) {
+  void _selectVariant(VideoVariant v) {
     if (_disposed) return;
     final asset = App.media.videoAsset(_word.id, v);
     final src = App.media.videoSource(_word.id, v);
     if (src == MediaSource.asset && asset == null) {
-      _markFailed();
-      return;
-    }
-    if (src == MediaSource.network && forceAsset && asset == null) {
       _markFailed();
       return;
     }
@@ -106,7 +102,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
         controller = VideoPlayerController.file(
             App.downloads.fileFor(App.media.videoName(_word.id, v)),
             videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
-      case MediaSource.network when !forceAsset:
+      case MediaSource.network:
         if (!kIsWeb && Platform.isIOS) {
           // AVPlayer cannot play 200-only CDN streams: fetch the whole
           // (tiny) video first, then play the local file. The previous
@@ -123,7 +119,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
           unawaited(App.downloads
               .ensureDownloaded(App.media.videoName(_word.id, v)));
         }
-      default: // bundled asset (FULL build, or web fallback)
+      default: // bundled asset (full flavor)
         controller = VideoPlayerController.asset(asset!,
             videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
     }
@@ -158,11 +154,6 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     }).catchError((Object e) {
       old?.dispose();
       if (_disposed) return; // State.dispose already disposed _controller
-      // Web (bundled) fallback: the CDN failed → retry from bundled assets.
-      if (!forceAsset && src == MediaSource.network && asset != null) {
-        _selectVariant(v, forceAsset: true);
-        return;
-      }
       // Drop the failed controller so the surface shows the empty state
       // instead of an eternal spinner, and release its platform resources.
       _markFailed();

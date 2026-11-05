@@ -61,7 +61,7 @@ jobs:
         run: flutter analyze
 
   build-web:
-    name: Build Web (bundled, streams CDN-first)
+    name: Build Web (CDN only)
     needs: [check, analyze]
     if: needs.check.outputs.should_run == 'true'
     runs-on: ubuntu-latest
@@ -75,12 +75,9 @@ jobs:
           channel: stable
           cache: true
 
-      # Web keeps the media bundled so GitHub Pages can serve as the
-      # per-video fallback when the CDN is unreachable.
-      - name: Switch to FULL (bundled) build
-        shell: pwsh
-        run: ./tools/toggle_videos.ps1 1
-
+      # Web builds use the default (lite) flavor, so the full-only data/videos
+      # assets are excluded automatically: the Pages artifact is ~70 MB
+      # (~40 MB zipped) instead of ~545 MB.
       - name: Build web
         run: flutter build web --release --base-href /vsl-dictionary/
 
@@ -132,10 +129,6 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Switch to FULL (bundled) build
-        shell: pwsh
-        run: ./tools/toggle_videos.ps1 1
-
       - name: Decode signing keystore
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/vsl-dictionary.jks
 
@@ -149,10 +142,10 @@ jobs:
           EOF
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --flavor full
 
       - name: Rename APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk vsl-dictionary-android-full.apk
+        run: cp build/app/outputs/flutter-apk/app-full-release.apk vsl-dictionary-android-full.apk
 
       - name: Upload FULL APK artifact
         uses: actions/upload-artifact@v4
@@ -176,11 +169,8 @@ jobs:
           channel: stable
           cache: true
 
-      # Committed state is already CDN mode; the toggle reconciles anyway.
-      - name: Switch to SMALL (CDN) build
-        shell: pwsh
-        run: ./tools/toggle_videos.ps1 0
-
+      # lite is the default flavor, but pass it explicitly so the artifact
+      # path and the bundle contents can never silently change.
       - name: Decode signing keystore
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/vsl-dictionary.jks
 
@@ -194,10 +184,10 @@ jobs:
           EOF
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --flavor lite
 
       - name: Rename APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk vsl-dictionary-android.apk
+        run: cp build/app/outputs/flutter-apk/app-lite-release.apk vsl-dictionary-android.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -221,12 +211,8 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Switch to FULL (bundled) build
-        shell: pwsh
-        run: ./tools/toggle_videos.ps1 1
-
       - name: Build unsigned iOS app
-        run: flutter build ios --release --no-codesign
+        run: flutter build ios --release --no-codesign --flavor full
 
       - name: Package unsigned IPA
         shell: bash
@@ -258,13 +244,9 @@ jobs:
           channel: stable
           cache: true
 
-      # Committed state is already CDN mode; the toggle reconciles anyway.
-      - name: Switch to SMALL (CDN) build
-        shell: pwsh
-        run: ./tools/toggle_videos.ps1 0
-
+      # Explicit lite flavor: Release-lite builds no bundled videos.
       - name: Build unsigned iOS app
-        run: flutter build ios --release --no-codesign
+        run: flutter build ios --release --no-codesign --flavor lite
 
       - name: Package unsigned IPA
         shell: bash

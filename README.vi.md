@@ -32,12 +32,16 @@ hiệu quốc gia tại [qipedc.moet.gov.vn/dictionary](https://qipedc.moet.gov.
 
 - **Android:** APK mới nhất tại
   [Releases](https://github.com/ngozz/vsl-dictionary/releases):
-  - `vsl-dictionary-android.apk` — nhỏ (~25 MB), video dấu phát từ CDN, tải
+  - `vsl-dictionary-android.apk` — lite (~83 MB), video dấu phát từ CDN, tải
     về trong ứng dụng để dùng offline
-  - `vsl-dictionary-android-full.apk` — ~600 MB, kèm toàn bộ media, offline
-    hoàn toàn ngay khi cài
-- **Web:** <https://ngozz.github.io/vsl-dictionary/>
+  - `vsl-dictionary-android-full.apk` — full (~600 MB), kèm toàn bộ media,
+    offline hoàn toàn ngay khi cài
+- **Web:** <https://ngozz.github.io/vsl-dictionary/> (luôn là bản lite —
+  video phát từ CDN)
 - **iOS** (IPA chưa ký): thêm vào SideStore/AltStore bằng nguồn bên dưới.
+  Có hai mục: `VSL Dictionary` (lite, CDN) và `VSL Dictionary Full` (kèm
+  toàn bộ video). Hai bản cài song song được vì bản full dùng
+  `com.ngozz.vslDictionary.full`.
 
 ## Ảnh minh họa
 
@@ -71,9 +75,9 @@ Giao diện tiếng Anh:
   dưới ở chế độ Kết hợp.
 - **Cá nhân hóa** — yêu thích, vùng mặc định, ba giao diện (tối / đen hoàn
   toàn AMOLED / sáng, Material 3 xanh lá).
-- **Offline hoàn toàn** — video dấu phát từ CDN theo mặc định (APK nhỏ
-  ~25 MB) và có thể tải về trong ứng dụng để có thư viện offline đầy đủ;
-  bản FULL (~600 MB APK) kèm sẵn toàn bộ.
+- **Offline hoàn toàn** — video dấu phát từ CDN theo mặc định (flavor `lite`,
+  APK ~83 MB) và có thể tải về trong ứng dụng để có thư viện offline đầy đủ;
+  flavor `full` (~600 MB) kèm sẵn toàn bộ.
 
 ## Cấu trúc dự án
 
@@ -101,10 +105,12 @@ do tôi thực hiện: video được encode lại thành H.264 mp4, ảnh thàn
 
 ```bash
 flutter pub get
-flutter run              # chạy trên thiết bị
-flutter build apk --release         # Android
-flutter build web --release         # Web → build/web
-flutter build ios --no-codesign     # iOS (cần Xcode + macOS)
+flutter run                          # chạy trên thiết bị (flavor lite)
+flutter build apk --release          # Android, lite (flavor mặc định)
+flutter build apk --release --flavor full   # Android, kèm toàn bộ video
+flutter build web --release          # Web → build/web (luôn lite)
+flutter build ios --no-codesign --flavor lite  # iOS (cần Xcode + macOS)
+flutter build ios --no-codesign --flavor full  # iOS kèm video
 ```
 
 ## CI/CD (GitHub Actions)
@@ -120,13 +126,13 @@ flutter build ios --no-codesign     # iOS (cần Xcode + macOS)
 Mỗi lần build **tạo một GitHub Release** (`v<số-run>`) chứa **cả hai biến
 thể**, build từ cùng một commit:
 
-- `vsl-dictionary-android.apk` — SMALL (CDN): video dấu phát từ media host,
+- `vsl-dictionary-android.apk` — flavor `lite`: video dấu phát từ media host,
   tải về trong ứng dụng để dùng offline
-- `vsl-dictionary-android-full.apk` — FULL: kèm toàn bộ media (~600 MB)
-- `vsl-dictionary-ios-unsigned.ipa` — SMALL (CDN); nguồn SideStore/AltStore
+- `vsl-dictionary-android-full.apk` — flavor `full`: kèm toàn bộ media (~600 MB)
+- `vsl-dictionary-ios-unsigned.ipa` — flavor `lite`; nguồn SideStore/AltStore
   trỏ tới file này
-- `vsl-dictionary-ios-full-unsigned.ipa` — FULL: kèm toàn bộ media
-- `vsl-dictionary-web.zip` — bản web tĩnh
+- `vsl-dictionary-ios-full-unsigned.ipa` — flavor `full`: kèm toàn bộ media
+- `vsl-dictionary-web.zip` — bản web tĩnh (luôn lite, chỉ dùng CDN)
 
 Bản web cũng được **triển khai lên GitHub Pages** tự động mỗi lần build
 `main` (base path được ném vào lúc build nên chạy được dưới `/<repo>/`).
@@ -134,26 +140,42 @@ Bản web cũng được **triển khai lên GitHub Pages** tự động mỗi l
 
 Muốn đưa lên Play Store hay F-Droid? Xem [PUBLISHING.md](PUBLISHING.md).
 
-## Chế độ CDN (bản SMALL)
+## Biến thể build (Flutter flavor)
+
+Cả hai biến thể dùng chung mã nguồn. `lite` là flavor mặc định
+(`default-flavor: lite` trong `pubspec.yaml`); `full` kèm thêm `data/videos/`
+vì thư mục asset đó được khai báo `flavors: [full]`. Flavor cũng điều khiển
+`CdnConfig.useCdn` (`appFlavor != 'full'`), nên code và asset không thể lệch
+nhau.
+
+| Flavor | Media | Android | iOS |
+|---|---|---|---|
+| `lite` (mặc định) | phát từ CDN, tải về trong ứng dụng | ~83 MB | ~36 MB |
+| `full` | kèm `data/videos/` | ~600 MB | ~600 MB |
+
+- **Web luôn là lite.** Web build dùng flavor mặc định, nên asset riêng của
+  bản full bị loại và artifact Pages chỉ còn ~70 MB trên đĩa (~40 MB khi
+  nén) thay vì ~545 MB. Video phát từ CDN; không còn bản kèm dự phòng.
+- **Cài song song.** Android `full` thêm `applicationIdSuffix ".full"` và iOS
+  `full` dùng `com.ngozz.vslDictionary.full`, nên cài cạnh bản lite được.
+- **Scheme iOS.** `ios/Runner.xcodeproj` có cấu hình build
+  `Debug/Release/Profile-lite` và `-full` cùng `lite.xcscheme`/`full.xcscheme`;
+  `APP_DISPLAY_NAME` đặt tên riêng cho từng app trên màn hình chính.
 
 Video dấu phát từ `https://vsl-dictionary-media.ngozz.workers.dev`
-(Cloudflare Workers static assets, free tier). Thứ tự ưu tiên: bản đã tải →
-CDN → asset kèm sẵn. `tools/toggle_videos.ps1` chuyển qua lại giữa hai biến
-thể (dòng asset trong pubspec + `lib/config.dart` cùng lúc); CI chạy nó hai
-lần mỗi release để build cả hai.
+(Cloudflare Workers static assets, free tier). Thứ tự ưu tiên: asset kèm sẵn
+(chỉ bản full) → bản đã tải → CDN.
 
 - **Tải tất cả** (Cài đặt → Tải xuống & cập nhật): ~513 MB vào bộ nhớ ứng
   dụng, kiểm tra kích thước + SHA-256 trước khi kích hoạt; chạy lại chỉ
   enqueue phần chênh lệch.
 - **Kiểm tra cập nhật**: khi mở ứng dụng (có thể tắt) hoặc thủ công — so
   kích thước manifest với bản local và hỏi trước khi tải lại bất cứ thứ gì.
-- **Web**: phát CDN-first; nếu CDN lỗi với một video, player thử lại từ bản
-  kèm trên GitHub Pages.
 
-Bản iOS có thể thêm vào SideStore hoặc AltStore bằng nguồn này:
-`https://ngozz.github.io/vsl-dictionary/altstore-source.json`. Nó trỏ tới bản
-IPA **nhỏ** chưa ký mới nhất (offline đến từ tải trong ứng dụng);
-SideStore/AltStore ký khi cài.
+Bản iOS có thể cài bằng SideStore hoặc AltStore với nguồn này:
+`https://ngozz.github.io/vsl-dictionary/altstore-source.json`. Nguồn liệt kê
+cả IPA **lite** chưa ký (offline đến từ tải trong ứng dụng) và IPA **full**
+chưa ký (kèm mọi thứ); SideStore/AltStore ký khi cài.
 
 ### Ghi chú setup repo
 

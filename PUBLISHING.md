@@ -25,24 +25,25 @@
    `metadata/com.ngozz.vsl_dictionary.yml`. Copy the build block from an
    existing Flutter app in fdroiddata; point `UpdateCheckData` at
    `pubspec.yaml` for auto-updates.
-4. Build the committed (CDN) state only — do **not** point the metadata at the
-   FULL variant. Keep the committed state = `tools/toggle_videos.ps1 0`.
+4. Build only the lite flavor — do **not** point the metadata at the full
+   variant. Use `flutter build apk --release --flavor lite` (`lite` is already
+   `default-flavor` in `pubspec.yaml`).
 5. Validate with `fdroid lint`, test the build via the fdroiddata CI, then
    open a merge request. Review takes days to weeks.
 
 Notes:
 - F-Droid signs the APK with its own key; `vsl-dictionary.jks` stays local and
   is never committed (CI signs GitHub releases from repo secrets).
-- The FULL APK (~600 MB, videos bundled) is a GitHub-only convenience.
+- The full APK (~600 MB, videos bundled) is a GitHub-only convenience.
 - Be ready to answer where the dictionary data/videos come from (MoET portal
   via the NgonTay project) — reviewers may raise NonFreeAssets for bundled
   media; the CDN variant bundles none.
 
 ## Play Store (optional)
 - One-time $25 fee; reuse the fastlane text and screenshots for the listing.
-- Build an AAB: `flutter build appbundle --release`.
+- Build an AAB: `flutter build appbundle --release --flavor lite`.
 - Data safety: the app collects no user data. Content rating: educational.
-- Distribute the CDN (small) APK/AAB, not the FULL variant.
+- Distribute the lite (CDN) APK/AAB, not the full variant.
 
 ## Never commit
 - `android/key.properties`, `*.jks` (gitignored; release signing uses GitHub

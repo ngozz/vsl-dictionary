@@ -106,7 +106,7 @@ class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
   bool _active = false;
   bool _askNotifications = true;
 
-  /// False on FULL builds, web and unsupported platforms.
+  /// False in the full flavor, on web and on unsupported platforms.
   bool get active => _active;
   bool get ready => _ready;
   int get downloadedCount => _downloaded.length;
@@ -127,8 +127,8 @@ class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
   VideoEntry? downloadedEntry(String name) => _downloaded[name];
 
   /// Whether the app knows this video exists at all (bundled asset handled
-  /// separately by MediaService). Backs variant lists in CDN builds and on
-  /// web, where the asset manifest has no videos.
+  /// separately by MediaService). Backs variant lists in the lite flavor and
+  /// on web, where the asset manifest has no videos.
   bool canStream(String name) => _catalogByName.containsKey(name);
 
   File fileFor(String name) => File('$_root/${_baseName(name)}.mp4');
@@ -195,7 +195,7 @@ class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
   ///
   /// Downloaded copies are trusted only together with a matching size (the
   /// play-time validity check); broken/missing copies fall back to streaming.
-  /// Web always streams first (asset fallback lives in the player).
+  /// Web always streams: the web build bundles no videos.
   MediaSource resolve(String rawName) {
     final name = _baseName(rawName);
     if (!kIsWeb && !CdnConfig.useCdn) return MediaSource.asset;
@@ -224,7 +224,7 @@ class DownloadService extends ChangeNotifier with WidgetsBindingObserver {
           CdnConfig.useCdn &&
           (Platform.isAndroid || Platform.isIOS);
       // The catalog loads on every platform: it powers canStream/hasVideo
-      // even on web and FULL builds (cheap rootBundle read).
+      // even on web and in the full flavor (cheap rootBundle read).
       await _loadCatalog();
       if (_active) {
         await _dl.start(autoCleanDatabase: true);

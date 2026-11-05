@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "VSL Dictionary",
   "identifier": "ngozz.vsl-dictionary",
   "apps": [
@@ -7,7 +7,7 @@
       "bundleIdentifier": "com.ngozz.vslDictionary",
       "developerName": "ngozz",
       "subtitle": "Vietnamese Sign Language dictionary",
-      "localizedDescription": "An offline-first Vietnamese Sign Language dictionary.",
+      "localizedDescription": "An offline-first Vietnamese Sign Language dictionary. Sign videos stream from the media CDN, and anything you download works offline.",
       "iconURL": "https://ngozz.github.io/vsl-dictionary/icons/Icon-512.png",
       "versions": [
         {
@@ -15,6 +15,22 @@
           "buildVersion": "1",
           "date": "2026-10-30T00:00:00Z",
           "downloadURL": "https://github.com/ngozz/vsl-dictionary/releases/latest/download/vsl-dictionary-ios-unsigned.ipa"
+        }
+      ]
+    },
+    {
+      "name": "VSL Dictionary Full",
+      "bundleIdentifier": "com.ngozz.vslDictionary.full",
+      "developerName": "ngozz",
+      "subtitle": "Vietnamese Sign Language dictionary, fully offline",
+      "localizedDescription": "The complete Vietnamese Sign Language dictionary with every sign video bundled, so it works with no network at all. Installs alongside the lite app because it uses its own bundle identifier.",
+      "iconURL": "https://ngozz.github.io/vsl-dictionary/icons/Icon-512.png",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "buildVersion": "1",
+          "date": "2026-10-30T00:00:00Z",
+          "downloadURL": "https://github.com/ngozz/vsl-dictionary/releases/latest/download/vsl-dictionary-ios-full-unsigned.ipa"
         }
       ]
     }

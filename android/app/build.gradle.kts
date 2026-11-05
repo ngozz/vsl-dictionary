@@ -29,6 +29,24 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Labels differ per flavor so the two installs are distinguishable.
+        manifestPlaceholders["appLabel"] = "VSL Dictionary"
+    }
+
+    // Two variants built from one checkout:
+    //   lite (default) - sign videos stream from the CDN (~83 MB APK)
+    //   full           - data/videos bundled (~600 MB APK); the .full suffix
+    //                    lets it coexist with the lite install.
+    flavorDimensions += "variant"
+    productFlavors {
+        create("lite") {
+            dimension = "variant"
+        }
+        create("full") {
+            dimension = "variant"
+            applicationIdSuffix = ".full"
+            manifestPlaceholders["appLabel"] = "VSL Dictionary Full"
+        }
     }
 
     // CI injects android/key.properties (from GitHub secrets); when absent,

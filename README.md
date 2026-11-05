@@ -32,12 +32,16 @@ Language Dictionary at [qipedc.moet.gov.vn/dictionary](https://qipedc.moet.gov.v
 
 - **Android:** latest APKs from
   [Releases](https://github.com/ngozz/vsl-dictionary/releases):
-  - `vsl-dictionary-android.apk` — small (~25 MB), streams sign videos from
+  - `vsl-dictionary-android.apk` — lite (~83 MB), streams sign videos from
     the CDN, downloads them in-app for offline use
-  - `vsl-dictionary-android-full.apk` — ~600 MB, everything bundled, works
-    fully offline out of the box
-- **Web:** <https://ngozz.github.io/vsl-dictionary/>
+  - `vsl-dictionary-android-full.apk` — full (~600 MB), everything bundled,
+    works fully offline out of the box
+- **Web:** <https://ngozz.github.io/vsl-dictionary/> (always the lite build —
+  videos stream from the CDN)
 - **iOS** (unsigned IPA): add to SideStore/AltStore with the source below.
+  Two entries are offered: `VSL Dictionary` (lite, CDN) and
+  `VSL Dictionary Full` (all videos bundled). They install side by side
+  because the full build uses `com.ngozz.vslDictionary.full`.
 
 ## Screenshots
 
@@ -73,8 +77,8 @@ Vietnamese UI:
 - **Personal touches** — favorites, default region preference, three themes
   (dark / pure-black AMOLED / light, green-seeded Material 3).
 - **Fully offline capable** — sign videos stream from the CDN by default
-  (small ~25 MB APK) and can be downloaded in-app for a fully offline
-  library; a FULL variant (~600 MB APK) bundles everything instead.
+  (`lite` flavor, ~83 MB APK) and can be downloaded in-app for a fully
+  offline library; the `full` flavor (~600 MB) bundles everything instead.
 
 ## Project layout
 
@@ -102,10 +106,12 @@ Data is mine: video files are re-encoded to H.264 mp4, images to WebP.
 
 ```bash
 flutter pub get
-flutter run              # run on a device
-flutter build apk --release         # Android
-flutter build web --release         # Web → build/web
-flutter build ios --no-codesign     # iOS (needs Xcode + macOS)
+flutter run                          # run on a device (lite flavor)
+flutter build apk --release          # Android, lite (default flavor)
+flutter build apk --release --flavor full   # Android, all videos bundled
+flutter build web --release          # Web → build/web (always lite)
+flutter build ios --no-codesign --flavor lite  # iOS (needs Xcode + macOS)
+flutter build ios --no-codesign --flavor full  # iOS with bundled videos
 ```
 
 ## CI/CD (GitHub Actions)
@@ -121,13 +127,13 @@ flutter build ios --no-codesign     # iOS (needs Xcode + macOS)
 Each build run **creates a GitHub Release** (`v<run-number>`) containing
 **both variants**, built from the same commit:
 
-- `vsl-dictionary-android.apk` — SMALL (CDN): streams sign videos from the
+- `vsl-dictionary-android.apk` — `lite` flavor: streams sign videos from the
   media host, downloads them in-app for offline use
-- `vsl-dictionary-android-full.apk` — FULL: all media bundled (~600 MB)
-- `vsl-dictionary-ios-unsigned.ipa` — SMALL (CDN); the SideStore/AltStore
+- `vsl-dictionary-android-full.apk` — `full` flavor: all media bundled (~600 MB)
+- `vsl-dictionary-ios-unsigned.ipa` — `lite` flavor; the SideStore/AltStore
   source points here
-- `vsl-dictionary-ios-full-unsigned.ipa` — FULL: all media bundled
-- `vsl-dictionary-web.zip` — static web build
+- `vsl-dictionary-ios-full-unsigned.ipa` — `full` flavor: all media bundled
+- `vsl-dictionary-web.zip` — static web build (always lite, CDN only)
 
 The web artifact is also **deployed to GitHub Pages** automatically on each
 `main` build (base path is baked at build time so it works under
@@ -136,26 +142,45 @@ The web artifact is also **deployed to GitHub Pages** automatically on each
 
 Thinking about Play Store or F-Droid? See [PUBLISHING.md](PUBLISHING.md).
 
-## CDN mode (SMALL builds)
+## Build variants (Flutter flavors)
+
+Both variants come from the same codebase. `lite` is the default flavor
+(`default-flavor: lite` in `pubspec.yaml`); `full` additionally bundles
+`data/videos/` because that asset directory is declared with
+`flavors: [full]`. The flavor also drives `CdnConfig.useCdn`
+(`appFlavor != 'full'`), so code and assets cannot drift apart.
+
+| Flavor | Media | Android | iOS |
+|---|---|---|---|
+| `lite` (default) | streamed from the CDN, downloadable in-app | ~83 MB | ~36 MB |
+| `full` | `data/videos/` bundled | ~600 MB | ~600 MB |
+
+- **Web is always lite.** Web builds use the default flavor, so the full-only
+  video assets are excluded and the Pages artifact is ~70 MB on disk
+  (~40 MB zipped) instead of ~545 MB. Videos stream from the CDN; there is
+  no bundled fallback.
+- **Side-by-side installs.** Android `full` adds `applicationIdSuffix ".full"`
+  and iOS `full` uses `com.ngozz.vslDictionary.full`, so it can live next to
+  the lite app.
+- **iOS schemes.** `ios/Runner.xcodeproj` has `Debug/Release/Profile-lite`
+  and `-full` build configurations plus `lite.xcscheme`/`full.xcscheme`;
+  `APP_DISPLAY_NAME` gives each app its own home-screen name.
 
 Sign videos stream from `https://vsl-dictionary-media.ngozz.workers.dev`
-(Cloudflare Workers static assets, free tier). Resolution order: downloaded
-copy → CDN stream → bundled asset. `tools/toggle_videos.ps1` flips between
-variants (pubspec asset line + `lib/config.dart` together); CI runs it
-twice per release to build both.
+(Cloudflare Workers static assets, free tier). Resolution order: bundled
+asset (full only) → downloaded copy → CDN stream.
 
 - **Download all** (Settings → Downloads & updates): ~513 MB into app
   storage with size+SHA-256 verification before promotion; re-running only
   enqueues the delta.
 - **Update check**: at startup (toggleable) or manually — compares manifest
   sizes against local copies and prompts before re-downloading anything.
-- **Web**: streams CDN-first; if the CDN fails for a video, the player
-  retries it from the bundled GitHub Pages copy.
 
-The iOS build can be added to SideStore or AltStore using this source:
-`https://ngozz.github.io/vsl-dictionary/altstore-source.json`. It points to
-the latest **small** unsigned IPA release (offline comes from in-app
-downloads); SideStore/AltStore signs it during installation.
+The iOS builds can be installed with SideStore or AltStore using this source:
+`https://ngozz.github.io/vsl-dictionary/altstore-source.json`. It lists both
+the **lite** unsigned IPA (offline comes from in-app downloads) and the
+**full** unsigned IPA (everything bundled); SideStore/AltStore signs them
+during installation.
 
 ### Repo setup notes
 
