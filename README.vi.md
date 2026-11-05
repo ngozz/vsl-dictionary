@@ -110,6 +110,7 @@ flutter build apk --release          # Android, lite (flavor mặc định)
 flutter build apk --release --flavor full   # Android, kèm toàn bộ video
 flutter build web --release          # Web → build/web (luôn lite)
 flutter build ios --no-codesign --flavor lite  # iOS (cần Xcode + macOS)
+flutter run --flavor full            # chạy bản full (kèm video)
 flutter build ios --no-codesign --flavor full  # iOS kèm video
 ```
 

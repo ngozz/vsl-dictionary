@@ -111,6 +111,7 @@ flutter build apk --release          # Android, lite (default flavor)
 flutter build apk --release --flavor full   # Android, all videos bundled
 flutter build web --release          # Web → build/web (always lite)
 flutter build ios --no-codesign --flavor lite  # iOS (needs Xcode + macOS)
+flutter run --flavor full            # run the full (bundled) variant
 flutter build ios --no-codesign --flavor full  # iOS with bundled videos
 ```
 
