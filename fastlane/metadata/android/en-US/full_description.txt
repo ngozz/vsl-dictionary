@@ -1,0 +1,26 @@
+VSL Dictionary is a fast, offline-first app for browsing the Vietnamese Sign
+Language dictionary: 4,300+ signs, video-first and search-first.
+
+FEATURES
+
+- Instant, accent-insensitive search: type "cho" and find "chó". Prefix and
+  syllable-aware ranking, with the match highlighted.
+- Browse tabs: All (alphabetical, with an A-Z jump rail), Words, Numbers,
+  Alphabet.
+- Word detail: sign video with 0.5x slow motion, fullscreen playback,
+  regional variants (North / Central / South) when available, definitions and
+  illustration images.
+- English included: English glosses and definitions, and an interface in
+  Vietnamese, English or Mixed (English headwords with Vietnamese kept
+  underneath). Search works in both languages.
+- Favorites and three themes (dark, pure-black AMOLED, light).
+- Offline capable: sign videos stream from the CDN by default (small APK) and
+  can be downloaded in-app for a fully offline library.
+
+DATA
+
+Dictionary content transcribed from the National Sign Language Dictionary
+(qipedc.moet.gov.vn) via the "NgonTay" project. This is a personal-use app,
+not the original work.
+
+Source code: https://github.com/ngozz/vsl-dictionary

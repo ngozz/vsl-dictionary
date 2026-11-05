@@ -1,0 +1,24 @@
+VSL Dictionary là ứng dụng tra cứu Từ điển Ký hiệu Việt Nam nhanh, ưu tiên
+offline: hơn 4.300 dấu, xem video là chính, tìm kiếm là chính.
+
+TÍNH NĂNG
+
+- Tìm kiếm tức thì, không phân biệt dấu: gõ "cho" vẫn ra "chó". Xếp hạng theo
+  tiền tố và âm tiết, khớp nội dung được đánh dấu.
+- Tab duyệt: Tất cả (theo bảng chữ cái, có thanh nhảy A-Z), Từ vựng, Số đếm,
+  Bảng chữ cái.
+- Trang từ: video dấu với chế độ chậm 0.5x, xem toàn màn hình, biến thể theo
+  vùng (Bắc / Trung / Nam) nếu có, nghĩa và ảnh minh họa.
+- Có tiếng Anh: nghĩa tiếng Anh, giao diện Tiếng Việt / English / Kết hợp
+  (từ tiếng Anh kèm tiếng Việt bên dưới). Tìm kiếm bằng cả hai ngôn ngữ.
+- Yêu thích và ba giao diện (tối, đen hoàn toàn AMOLED, sáng).
+- Offline: video dấu phát từ CDN theo mặc định (APK nhỏ) và có thể tải về
+  trong ứng dụng để dùng hoàn toàn offline.
+
+DỮ LIỆU
+
+Nội dung từ điển được chuyển thể từ Cổng thông tin Ngôn ngữ ký hiệu quốc gia
+(qipedc.moet.gov.vn) qua dự án "NgonTay". Đây là ứng dụng dùng cá nhân,
+không phải sản phẩm gốc.
+
+Mã nguồn: https://github.com/ngozz/vsl-dictionary
